@@ -150,6 +150,41 @@ detect_iran_network_conditions() {
     echo "IRAN_CONFIDENCE_SCORE=$iran_score" >> "$STATUS_FILE"
 }
 
+# Quick Iran network detection (< 2 seconds)
+quick_detect_iran_network() {
+    local iran_indicators=0
+    local total_checks=3
+    
+    # Quick Check 1: DNS test (1 second max)
+    if ! timeout 1 nslookup google.com 8.8.8.8 >/dev/null 2>&1; then
+        ((iran_indicators++))
+    fi
+    
+    # Quick Check 2: Single ping test (1 second max)  
+    if ! timeout 1 ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1; then
+        ((iran_indicators++))
+    fi
+    
+    # Quick Check 3: Check cached result from previous detailed test
+    if [[ -f "$STATUS_FILE" ]] && grep -q "IRAN_NETWORK_DETECTED=true" "$STATUS_FILE" 2>/dev/null; then
+        ((iran_indicators++))
+    fi
+    
+    local iran_score=$((iran_indicators * 100 / total_checks))
+    
+    # Start detailed detection in background for future use
+    (detect_iran_network_conditions) &
+    
+    if [[ $iran_score -ge 50 ]]; then
+        echo "iran_detected"
+        # Apply basic Iran optimizations quickly
+        PROTOCOL="tcp"
+        ENABLED_PROTOCOLS="tcp,ws,udp"
+    else
+        echo "normal_network"
+    fi
+}
+
 apply_iran_optimizations() {
     log yellow "🇮🇷 Applying Iran-specific optimizations..."
     
@@ -1142,81 +1177,184 @@ setup_geo_load_balancing() {
         return 1
     fi
     
-    # Test all foreign servers
-    declare -A server_metrics
-    local server_count=0
-    
+    # FAST GEO BALANCING - Quick ping test only
     IFS=',' read -ra SERVERS <<< "$REMOTE_SERVER"
+    log cyan "⚡ Fast testing ${#SERVERS[@]} servers for geo load balancing..."
     
-    log cyan "🧪 Testing ${#SERVERS[@]} servers for geo load balancing..."
+    local best_server=""
+    local best_latency=9999
+    local temp_results="/tmp/moontun_geo_results.$$"
     
+    # Parallel fast ping test (max 3 seconds total)
     for server in "${SERVERS[@]}"; do
         server=$(echo "$server" | xargs)  # trim whitespace
         if [[ -n "$server" ]]; then
-            log blue "🔍 Testing server: $server"
-            
-            local latency=$(test_server_latency "$server")
-            local stability=$(test_server_stability "$server")
-            local bandwidth=$(test_server_bandwidth "$server")
-            local location=$(detect_server_location "$server")
-            
-            # Calculate composite score
-            local score=$(calculate_server_score "$latency" "$stability" "$bandwidth" "$location")
-            server_metrics["$server"]="$score:$latency:$stability:$bandwidth:$location"
-            
-            log blue "Server $server: Latency=${latency}ms, Stability=$stability%, Bandwidth=${bandwidth}KB/s, Location=$location, Score=$score"
-            ((server_count++))
+            (
+                # Single quick ping with 2 second timeout
+                local latency=$(timeout 2 ping -c 1 -W 1 "$server" 2>/dev/null | 
+                              grep "time=" | awk -F'time=' '{print $2}' | awk '{print $1}' 2>/dev/null || echo "999")
+                echo "$server:$latency" >> "$temp_results"
+                log blue "🔍 Testing server: $server - ${latency}ms"
+            ) &
         fi
     done
     
-    if [[ $server_count -eq 0 ]]; then
-        log red "No valid servers found for geo load balancing"
-        return 1
+    # Wait for all tests to complete (max 3 seconds)
+    sleep 3
+    wait
+    
+    # Select best server from results
+    if [[ -f "$temp_results" ]]; then
+        while IFS=: read -r server latency; do
+            if [[ "$latency" != "999" ]] && (( $(echo "$latency < $best_latency" | bc -l 2>/dev/null || echo 0) )); then
+                best_server="$server"
+                best_latency="$latency"
+            fi
+        done < "$temp_results"
+        rm -f "$temp_results"
     fi
     
-    # Sort servers by score
-    local best_servers=""
-    for server in "${!server_metrics[@]}"; do
-        local score=$(echo "${server_metrics[$server]}" | cut -d':' -f1)
-        echo "$score $server"
-    done | sort -nr | while read score server; do
-        if [[ -z "$best_servers" ]]; then
-            best_servers="$server"
-        else
-            best_servers="$best_servers,$server"
-        fi
-        
-        # Log server ranking
-        local metrics="${server_metrics[$server]}"
-        local latency=$(echo "$metrics" | cut -d':' -f2)
-        local stability=$(echo "$metrics" | cut -d':' -f3)
-        local bandwidth=$(echo "$metrics" | cut -d':' -f4)
-        local location=$(echo "$metrics" | cut -d':' -f5)
-        
-        log green "🏆 Rank: $server (Score: $score, ${latency}ms, ${stability}%, ${bandwidth}KB/s, $location)"
-    done
-    
-    # Update configuration with best servers (top 3)
-    local top_servers=$(for server in "${!server_metrics[@]}"; do
-        local score=$(echo "${server_metrics[$server]}" | cut -d':' -f1)
-        echo "$score $server"
-    done | sort -nr | head -3 | awk '{print $2}' | tr '\n' ',' | sed 's/,$//')
-    
-    if [[ -n "$top_servers" ]]; then
-        log cyan "📝 Updating configuration with top servers: $top_servers"
-        sed -i "s/REMOTE_SERVER=\".*\"/REMOTE_SERVER=\"$top_servers\"/" "$MAIN_CONFIG"
-        
-        # Store geo metrics for monitoring
-        echo "GEO_BALANCING_ENABLED=true" >> "$STATUS_FILE"
-        echo "LAST_GEO_UPDATE=$(date +%s)" >> "$STATUS_FILE"
-        echo "TOP_SERVERS=$top_servers" >> "$STATUS_FILE"
-        
-        log green "✅ Geo load balancing configured with $top_servers"
-        return 0
+    # Fallback to first server if no good results
+    if [[ -z "$best_server" ]]; then
+        best_server=$(echo "$REMOTE_SERVER" | cut -d',' -f1)
+        log yellow "⚠️ Using fallback server: $best_server"
     else
-        log red "❌ Failed to select top servers"
-        return 1
+        log green "🏆 Best server selected: $best_server (${best_latency}ms)"
     fi
+    
+    # Update configuration with selected server
+    log cyan "📝 Updating configuration with server: $best_server"
+    sed -i "s/REMOTE_SERVER=\".*\"/REMOTE_SERVER=\"$best_server\"/" "$MAIN_CONFIG"
+    
+    # Store geo metrics for monitoring
+    echo "GEO_BALANCING_ENABLED=true" >> "$STATUS_FILE"
+    echo "LAST_GEO_UPDATE=$(date +%s)" >> "$STATUS_FILE"
+    echo "SELECTED_SERVER=$best_server" >> "$STATUS_FILE"
+    echo "SELECTED_LATENCY=$best_latency" >> "$STATUS_FILE"
+    
+    log green "✅ Fast geo load balancing configured with $best_server"
+    
+    # Start background detailed testing for future use
+    (background_detailed_geo_testing "$REMOTE_SERVER") &
+    
+    return 0
+}
+
+# Background detailed geo testing for future optimization
+background_detailed_geo_testing() {
+    local servers="$1"
+    local cache_file="/tmp/moontun_detailed_geo_cache"
+    
+    # Only run if not already running
+    if [[ -f "/tmp/moontun_geo_testing.lock" ]]; then
+        return 0
+    fi
+    
+    touch "/tmp/moontun_geo_testing.lock"
+    
+    log blue "🔍 Starting background detailed geo testing..."
+    
+    # Detailed testing with lower timeouts
+    IFS=',' read -ra SERVERS <<< "$servers"
+    echo "# Detailed geo test results - $(date)" > "$cache_file"
+    
+    for server in "${SERVERS[@]}"; do
+        server=$(echo "$server" | xargs)
+        if [[ -n "$server" ]]; then
+            local latency=$(quick_test_server_latency "$server")
+            local stability=$(quick_test_server_stability "$server")
+            local location=$(quick_detect_location "$server")
+            local score=$(calculate_quick_score "$latency" "$stability" "$location")
+            
+            echo "$server:$score:$latency:$stability:$location" >> "$cache_file"
+            
+            # Small delay to avoid overwhelming network
+            sleep 2
+        fi
+    done
+    
+    log blue "✅ Background geo testing completed"
+    rm -f "/tmp/moontun_geo_testing.lock"
+}
+
+# Quick versions of testing functions with reduced timeouts
+quick_test_server_latency() {
+    local server="$1"
+    local latency=$(timeout 3 ping -c 2 "$server" 2>/dev/null | 
+                   grep "time=" | tail -1 | awk -F'time=' '{print $2}' | awk '{print $1}' 2>/dev/null || echo "999")
+    echo "$latency"
+}
+
+quick_test_server_stability() {
+    local server="$1"
+    local successful_tests=0
+    local total_tests=3
+    
+    for ((i=1; i<=total_tests; i++)); do
+        if timeout 2 ping -c 1 "$server" >/dev/null 2>&1; then
+            ((successful_tests++))
+        fi
+    done
+    
+    local stability_percentage=$((successful_tests * 100 / total_tests))
+    echo "$stability_percentage"
+}
+
+quick_detect_location() {
+    local server="$1"
+    local location="unknown"
+    
+    # Quick latency-based location detection
+    local latency=$(timeout 2 ping -c 1 "$server" 2>/dev/null | grep "time=" | awk -F'time=' '{print $2}' | awk '{print $1}' 2>/dev/null || echo "999")
+    
+    if [[ -n "$latency" ]] && [[ "$latency" != "999" ]]; then
+        if (( $(echo "$latency < 50" | bc -l 2>/dev/null || echo 0) )); then
+            location="local"
+        elif (( $(echo "$latency < 150" | bc -l 2>/dev/null || echo 0) )); then
+            location="regional"
+        else
+            location="distant"
+        fi
+    fi
+    
+    echo "$location"
+}
+
+calculate_quick_score() {
+    local latency="$1"
+    local stability="$2"
+    local location="$3"
+    
+    local score=0
+    
+    # Quick scoring based on latency (60% weight)
+    if (( $(echo "${latency:-999} < 50" | bc -l 2>/dev/null || echo 0) )); then
+        score=$((score + 60))
+    elif (( $(echo "${latency:-999} < 100" | bc -l 2>/dev/null || echo 0) )); then
+        score=$((score + 50))
+    elif (( $(echo "${latency:-999} < 200" | bc -l 2>/dev/null || echo 0) )); then
+        score=$((score + 30))
+    elif (( $(echo "${latency:-999} < 500" | bc -l 2>/dev/null || echo 0) )); then
+        score=$((score + 10))
+    fi
+    
+    # Stability scoring (30% weight)
+    if [[ "${stability:-0}" -gt 80 ]]; then
+        score=$((score + 30))
+    elif [[ "${stability:-0}" -gt 60 ]]; then
+        score=$((score + 20))
+    elif [[ "${stability:-0}" -gt 40 ]]; then
+        score=$((score + 10))
+    fi
+    
+    # Location bonus (10% weight)
+    case "$location" in
+        "local") score=$((score + 10)) ;;
+        "regional") score=$((score + 8)) ;;
+        "distant") score=$((score + 5)) ;;
+    esac
+    
+    echo "$score"
 }
 
 test_server_latency() {
@@ -1452,8 +1590,8 @@ start_easytier_optimized() {
     # Load configuration
     source "$MAIN_CONFIG"
     
-    # Detect Iran network conditions first
-    local network_type=$(detect_iran_network_conditions)
+    # Quick Iran network detection (non-blocking)
+    local network_type=$(quick_detect_iran_network)
     
     # Build optimized EasyTier command
     local easytier_cmd="$DEST_DIR/easytier-core"
@@ -1577,8 +1715,25 @@ start_easytier_optimized() {
     nohup $final_cmd > "$LOG_DIR/easytier_optimized.log" 2>&1 &
     local easytier_pid=$!
     
-    # Wait and verify startup
-    sleep 5
+    # Quick startup verification with timeout
+    local startup_timeout=10
+    local wait_count=0
+    
+    while [[ $wait_count -lt $startup_timeout ]]; do
+        if kill -0 "$easytier_pid" 2>/dev/null; then
+            # Process is running, check if it's actually working
+            if [[ $wait_count -gt 2 ]]; then
+                # Give it a moment to initialize
+                break
+            fi
+        else
+            # Process died early
+            log red "❌ EasyTier process died during startup"
+            return 1
+        fi
+        sleep 1
+        ((wait_count++))
+    done
     
     if kill -0 "$easytier_pid" 2>/dev/null; then
         echo "ACTIVE_TUNNEL=easytier" > "$STATUS_FILE"
@@ -1600,7 +1755,64 @@ start_easytier_optimized() {
         return 0
     else
         log red "❌ Failed to start optimized EasyTier"
-        cat "$LOG_DIR/easytier_optimized.log" | tail -20
+        cat "$LOG_DIR/easytier_optimized.log" | tail -10
+        
+        # Try simplified fallback command
+        log yellow "🔄 Attempting simplified EasyTier fallback..."
+        if start_easytier_simple_fallback; then
+            log green "✅ EasyTier started with simplified configuration"
+            return 0
+        else
+            log red "❌ Both optimized and simplified EasyTier failed"
+            return 1
+        fi
+    fi
+}
+
+# Simplified EasyTier fallback for critical situations
+start_easytier_simple_fallback() {
+    log cyan "⚡ Starting simplified EasyTier fallback..."
+    
+    # Kill any existing processes
+    pkill -f "easytier-core" 2>/dev/null || true
+    sleep 2
+    
+    # Load basic configuration
+    source "$MAIN_CONFIG"
+    
+    # Build minimal working command
+    local simple_cmd="$DEST_DIR/easytier-core"
+    simple_cmd="$simple_cmd -i $LOCAL_IP"
+    simple_cmd="$simple_cmd --network-secret $NETWORK_SECRET"
+    simple_cmd="$simple_cmd --default-protocol tcp"
+    simple_cmd="$simple_cmd --listeners tcp://0.0.0.0:$PORT"
+    
+    # Add peer connection if available
+    if [[ -n "$REMOTE_SERVER" ]]; then
+        local first_server=$(echo "$REMOTE_SERVER" | cut -d',' -f1)
+        simple_cmd="$simple_cmd --peers tcp://$first_server:$PORT"
+    fi
+    
+    log cyan "🚀 Simple EasyTier command: $simple_cmd"
+    
+    # Start with minimal configuration
+    nohup $simple_cmd > "$LOG_DIR/easytier_simple.log" 2>&1 &
+    local easytier_pid=$!
+    
+    # Quick verification
+    sleep 3
+    
+    if kill -0 "$easytier_pid" 2>/dev/null; then
+        echo "ACTIVE_TUNNEL=easytier" > "$STATUS_FILE"
+        echo "NODE_TYPE=simple" >> "$STATUS_FILE"
+        echo "EASYTIER_PID=$easytier_pid" >> "$STATUS_FILE"
+        echo "FALLBACK_MODE=true" >> "$STATUS_FILE"
+        
+        log green "✅ Simple EasyTier started successfully (PID: $easytier_pid)"
+        return 0
+    else
+        log red "❌ Simple EasyTier also failed"
+        cat "$LOG_DIR/easytier_simple.log" | tail -10
         return 1
     fi
 }

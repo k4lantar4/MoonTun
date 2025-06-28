@@ -2359,22 +2359,7 @@ setup_tunnel() {
         esac
     fi
     
-    # Node configuration based on tunnel mode
-    echo
-    if [[ "$TUNNEL_MODE" == "easytier" ]] || [[ "$TUNNEL_MODE" == "hybrid" ]]; then
-        log blue "🏗️  EasyTier Configuration:"
-        echo "1) Standalone Node (No remote peers - Listen for connections)"
-        echo "2) Connected Node (Connect to remote peers)"
-        echo
-        read -p "Select configuration [1-2]: " easytier_node_choice
-        
-        case ${easytier_node_choice:-1} in
-            1) EASYTIER_NODE_TYPE="standalone" ;;
-            2) EASYTIER_NODE_TYPE="connected" ;;
-            *) EASYTIER_NODE_TYPE="standalone" ;;
-        esac
-    fi
-    
+    # Rathole configuration for non-EasyTier modes
     if [[ "$TUNNEL_MODE" == "rathole" ]] || [[ "$TUNNEL_MODE" == "hybrid" ]]; then
         log blue "🔧 Rathole Configuration:"
         echo "1) Listener (Primary node - receives connections)"
@@ -2391,33 +2376,48 @@ setup_tunnel() {
         esac
     fi
     
-    # Network configuration based on node types
+    # Network configuration
     echo
     log blue "🌐 Network Configuration:"
     
     # Local IP configuration
-    if [[ "$TUNNEL_MODE" == "easytier" ]] && [[ "$EASYTIER_NODE_TYPE" == "standalone" ]]; then
-        read -p "Local tunnel IP [10.10.10.1]: " input_local_ip
-        LOCAL_IP=${input_local_ip:-10.10.10.1}
-        REMOTE_SERVER=""
-        REMOTE_IP=""
-        log cyan "💡 Standalone mode: No remote configuration needed"
-    else
-        read -p "Local tunnel IP [10.10.10.2]: " input_local_ip
-        LOCAL_IP=${input_local_ip:-10.10.10.2}
+    read -p "Local tunnel IP [10.10.10.1]: " input_local_ip
+    LOCAL_IP=${input_local_ip:-10.10.10.1}
+    
+    # Improved Remote Peers Configuration
+    echo
+    if [[ "$TUNNEL_MODE" == "easytier" ]] || [[ "$TUNNEL_MODE" == "hybrid" ]]; then
+        log blue "🏗️  EasyTier Remote Configuration:"
+        echo "💡 Leave empty for Standalone mode (listen for connections)"
+        echo "💡 Enter IP(s) for Connected mode - separate multiple IPs with commas"
+        echo "💡 Examples: 10.10.10.2 or 10.10.10.2,10.10.10.3"
+        read -p "Remote peer IP(s) [empty for standalone]: " input_remote_ips
         
-        # Multiple peer support
-        echo
+        if [[ -z "$input_remote_ips" ]]; then
+            # Standalone mode - listen for connections
+            EASYTIER_NODE_TYPE="standalone"
+            REMOTE_SERVER=""
+            REMOTE_IP=""
+            log cyan "💡 Standalone mode: Will listen for incoming connections"
+        else
+            # Connected mode - connect to peers
+            EASYTIER_NODE_TYPE="connected"
+            REMOTE_IP="$input_remote_ips"
+            REMOTE_SERVER="$input_remote_ips"
+            log cyan "💡 Connected mode: Will connect to peer(s): $input_remote_ips"
+        fi
+    else
+        # For non-EasyTier modes, remote server is still required
         log blue "🌐 Remote Peers Configuration:"
         echo "Enter remote servers (comma-separated for multiple peers):"
         read -p "Remote server(s): " REMOTE_SERVER
         if [[ -z "$REMOTE_SERVER" ]]; then
-            log red "At least one remote server is required for connected mode"
+            log red "At least one remote server is required for $TUNNEL_MODE mode"
             return 1
         fi
         
-        read -p "Remote tunnel IP [10.10.10.1]: " input_remote_ip
-        REMOTE_IP=${input_remote_ip:-10.10.10.1}
+        read -p "Remote tunnel IP [10.10.10.2]: " input_remote_ip
+        REMOTE_IP=${input_remote_ip:-10.10.10.2}
     fi
     
     read -p "Tunnel port [1377]: " input_port
@@ -2599,19 +2599,32 @@ validate_configuration() {
     # Basic validation
     [[ -n "$TUNNEL_MODE" ]] || { log red "TUNNEL_MODE is empty"; return 1; }
     [[ -n "$LOCAL_IP" ]] || { log red "LOCAL_IP is empty"; return 1; }
-    [[ -n "$REMOTE_IP" ]] || { log red "REMOTE_IP is empty"; return 1; }
-    [[ -n "$REMOTE_SERVER" ]] || { log red "REMOTE_SERVER is empty"; return 1; }
     [[ -n "$NETWORK_SECRET" ]] || { log red "NETWORK_SECRET is empty"; return 1; }
     [[ -n "$PROTOCOL" ]] || { log red "PROTOCOL is empty"; return 1; }
     [[ -n "$PORT" ]] || { log red "PORT is empty"; return 1; }
     
-    # Validate IP addresses
-    if ! [[ "$LOCAL_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-        log red "Invalid LOCAL_IP format"; return 1
+    # For standalone EasyTier mode, REMOTE_IP and REMOTE_SERVER can be empty
+    if [[ "$TUNNEL_MODE" == "easytier" ]] && [[ "${EASYTIER_NODE_TYPE:-}" == "standalone" ]]; then
+        log blue "ℹ️  Standalone mode detected - skipping remote validation"
+    else
+        # For connected modes, validate remote configuration
+        [[ -n "$REMOTE_IP" ]] || { log red "REMOTE_IP is empty"; return 1; }
+        [[ -n "$REMOTE_SERVER" ]] || { log red "REMOTE_SERVER is empty"; return 1; }
+        
+        # Validate remote IP format (can be comma-separated list)
+        local IFS=','
+        local remote_ips=($REMOTE_IP)
+        for ip in "${remote_ips[@]}"; do
+            ip=$(echo "$ip" | xargs) # trim whitespace
+            if ! [[ "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+                log red "Invalid REMOTE_IP format: $ip"; return 1
+            fi
+        done
     fi
     
-    if ! [[ "$REMOTE_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-        log red "Invalid REMOTE_IP format"; return 1
+    # Validate local IP format
+    if ! [[ "$LOCAL_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        log red "Invalid LOCAL_IP format"; return 1
     fi
     
     # Validate port
@@ -3558,12 +3571,15 @@ start_easytier() {
     # Configure based on node type
     if [[ "${EASYTIER_NODE_TYPE:-connected}" == "standalone" ]]; then
         log cyan "🏗️  Starting as Standalone Node..."
-        listeners="--listeners ${PROTOCOL}://0.0.0.0:${PORT}"
+        
+        # Standalone mode: Listen on both IPv4 and IPv6
+        listeners="--listeners ${PROTOCOL}://[::]:${PORT} ${PROTOCOL}://0.0.0.0:${PORT}"
         
         # Standalone mode: Listen on 0.0.0.0 with local IP in virtual network
         easytier_cmd="$easytier_cmd -i $LOCAL_IP"
         
-        log cyan "💡 Standalone mode: Waiting for nodes to connect..."
+        log cyan "💡 Standalone mode: Listening on ${PROTOCOL}://0.0.0.0:${PORT} and ${PROTOCOL}://[::]:${PORT}"
+        log cyan "💡 Waiting for nodes to connect..."
     else
         log cyan "🔗 Starting as Connected Node..."
         
@@ -3572,7 +3588,8 @@ start_easytier() {
             return 1
         fi
         
-        listeners="--listeners ${PROTOCOL}://0.0.0.0:${PORT}"
+        # Connected mode: Listen on both IPv4 and IPv6 + connect to peers
+        listeners="--listeners ${PROTOCOL}://[::]:${PORT} ${PROTOCOL}://0.0.0.0:${PORT}"
         
         # Multi-peer support: Split comma-separated servers
         local peer_list=""
@@ -3589,6 +3606,7 @@ start_easytier() {
         easytier_cmd="$easytier_cmd -i $LOCAL_IP"
         
         log cyan "🎯 Connecting to peers: $REMOTE_SERVER"
+        log cyan "💡 Also listening on ${PROTOCOL}://0.0.0.0:${PORT} and ${PROTOCOL}://[::]:${PORT}"
     fi
     
     # Add performance options
@@ -4027,7 +4045,21 @@ show_connection_status() {
     echo
     log cyan "📋 Connection Details:"
     echo "  🌐 Local tunnel IP: $LOCAL_IP"
-    echo "  🎯 Remote tunnel IP: $REMOTE_IP"
+    
+    # Show node type and configuration
+    if [[ "$TUNNEL_MODE" == "easytier" ]]; then
+        if [[ "${EASYTIER_NODE_TYPE:-connected}" == "standalone" ]]; then
+            echo "  🏗️  EasyTier Mode: Standalone (Listening for connections)"
+            echo "  🎧 Listeners: ${PROTOCOL}://[::]:${PORT} and ${PROTOCOL}://0.0.0.0:${PORT}"
+        else
+            echo "  🔗 EasyTier Mode: Connected (Connecting to peers)"
+            echo "  🎯 Remote peer IPs: $REMOTE_IP"
+            echo "  🎧 Listeners: ${PROTOCOL}://[::]:${PORT} and ${PROTOCOL}://0.0.0.0:${PORT}"
+        fi
+    else
+        echo "  🎯 Remote tunnel IP: $REMOTE_IP"
+    fi
+    
     echo "  🔌 Protocol: $PROTOCOL"
     echo "  🚪 Port: $PORT"
     echo "  🔐 Secret: $NETWORK_SECRET"
@@ -4041,7 +4073,18 @@ show_connection_status() {
         echo "  🌍 Network Type: Standard"
     fi
     
+    # Show connection instructions
+    if [[ "$TUNNEL_MODE" == "easytier" ]] && [[ "${EASYTIER_NODE_TYPE:-connected}" == "standalone" ]]; then
+        echo
+        log blue "📢 Connection Instructions for Other Nodes:"
+        echo "  Use this IP/Port to connect: $(get_public_ip):${PORT}"
+        echo "  Protocol: ${PROTOCOL}"
+        echo "  Example command for connecting node:"
+        echo "    --peers ${PROTOCOL}://$(get_public_ip):${PORT}"
+    fi
+    
     # Show active features
+    echo
     echo "  🔧 Active Features:"
     if [[ "${GEO_BALANCING_ENABLED:-false}" == "true" ]]; then
         echo "    ✅ Geographic Load Balancing"
@@ -4051,6 +4094,12 @@ show_connection_status() {
     fi
     if [[ "${HYBRID_MODE:-}" == "optimized" ]]; then
         echo "    ✅ Hybrid Mode (EasyTier + Rathole)"
+    fi
+    if [[ "${ENCRYPTION:-true}" == "true" ]]; then
+        echo "    ✅ Encryption Enabled"
+    fi
+    if [[ "${MULTI_THREAD:-true}" == "true" ]]; then
+        echo "    ✅ Multi-threading Enabled"
     fi
     echo
 }

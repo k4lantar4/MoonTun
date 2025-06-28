@@ -258,10 +258,32 @@ install_moontun() {
     install_easytier
     install_rathole
     
-    # Install MoonTun manager
+    # Install MoonTun manager with multiple locations for maximum compatibility
     log cyan "Installing MoonTun manager..."
+    
+    # Primary installation location
     cp "$0" "$DEST_DIR/moontun"
     chmod +x "$DEST_DIR/moontun"
+    
+    # Backup installation location (in case /usr/local/bin is not in PATH)
+    cp "$0" "/usr/bin/moontun"
+    chmod +x "/usr/bin/moontun"
+    
+    # Create symbolic link for additional compatibility
+    ln -sf "/usr/bin/moontun" "/usr/local/bin/mv" 2>/dev/null || true
+    ln -sf "/usr/bin/moontun" "/usr/bin/mv" 2>/dev/null || true
+    
+    # Verify installation
+    if command -v moontun >/dev/null 2>&1; then
+        log green "✅ MoonTun command installed successfully"
+    else
+        log yellow "⚠️  Adding /usr/local/bin to PATH for current session"
+        export PATH="/usr/local/bin:$PATH"
+        
+        # Add to shell profiles for persistence
+        echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc 2>/dev/null || true
+        echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.zshrc 2>/dev/null || true
+    fi
     
     # Create systemd service
     create_systemd_service
@@ -276,10 +298,18 @@ install_moontun() {
     echo "  sudo moontun connect   # Quick connect"
     echo "  sudo moontun status    # Check status"
     echo "  sudo moontun monitor   # Live monitoring"
+    echo "  sudo mv setup          # Alternative command"
+    echo
+    log yellow "💡 If 'moontun' command not found, try:"
+    echo "  source ~/.bashrc       # Reload shell config"
+    echo "  sudo /usr/bin/moontun  # Direct path"
     echo
 }
 
 create_systemd_service() {
+    # Use /usr/bin path for better compatibility
+    local exec_path="/usr/bin/moontun"
+    
     cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
 [Unit]
 Description=MoonTun Intelligent Tunnel Service
@@ -288,7 +318,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$DEST_DIR/moontun daemon-mode
+ExecStart=$exec_path daemon-mode
 ExecStop=/bin/kill -TERM \$MAINPID
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
@@ -305,6 +335,90 @@ EOF
 
     systemctl daemon-reload
     systemctl enable ${SERVICE_NAME}.service
+}
+
+# Function to diagnose installation issues
+diagnose_installation() {
+    clear
+    log purple "🔍 MoonTun Installation Diagnosis"
+    echo "================================="
+    echo
+    
+    log cyan "Checking installation status..."
+    
+    # Check if files exist
+    local files_check=true
+    echo "📁 File existence check:"
+    
+    local install_paths=("/usr/bin/moontun" "/usr/local/bin/moontun" "/usr/local/bin/mv" "/usr/bin/mv")
+    for path in "${install_paths[@]}"; do
+        if [[ -f "$path" ]]; then
+            echo "  ✅ $path: Found"
+            if [[ -x "$path" ]]; then
+                echo "     ✅ Executable: Yes"
+            else
+                echo "     ❌ Executable: No"
+                chmod +x "$path" 2>/dev/null && echo "     🔧 Fixed executable permission"
+            fi
+        else
+            echo "  ❌ $path: Not found"
+            files_check=false
+        fi
+    done
+    
+    echo
+    echo "🌍 PATH environment check:"
+    echo "  Current PATH: $PATH"
+    
+    if [[ ":$PATH:" == *":/usr/local/bin:"* ]]; then
+        echo "  ✅ /usr/local/bin is in PATH"
+    else
+        echo "  ❌ /usr/local/bin is NOT in PATH"
+        echo "  🔧 Adding to current session..."
+        export PATH="/usr/local/bin:$PATH"
+    fi
+    
+    if [[ ":$PATH:" == *":/usr/bin:"* ]]; then
+        echo "  ✅ /usr/bin is in PATH"
+    else
+        echo "  ❌ /usr/bin is NOT in PATH (unusual)"
+    fi
+    
+    echo
+    echo "🔍 Command availability check:"
+    if command -v moontun >/dev/null 2>&1; then
+        echo "  ✅ 'moontun' command: Available"
+        echo "  📍 Location: $(which moontun)"
+    else
+        echo "  ❌ 'moontun' command: Not available"
+    fi
+    
+    if command -v mv >/dev/null 2>&1; then
+        local mv_location=$(which mv)
+        if [[ "$mv_location" == "/usr/bin/moontun" ]] || [[ "$mv_location" == "/usr/local/bin/mv" ]]; then
+            echo "  ✅ 'mv' command (MoonTun): Available"
+            echo "  📍 Location: $mv_location"
+        else
+            echo "  ⚠️  'mv' command: System default (not MoonTun)"
+            echo "  📍 Location: $mv_location"
+        fi
+    fi
+    
+    echo
+    echo "🛠️  Quick fix options:"
+    echo "1) Use direct path: sudo /usr/bin/moontun"
+    echo "2) Reload shell: source ~/.bashrc"
+    echo "3) Re-install: curl -fsSL https://raw.githubusercontent.com/k4lantar4/moontun/main/moontun.sh | sudo bash -s -- --install"
+    echo "4) Manual PATH fix: export PATH=\"/usr/local/bin:\$PATH\""
+    echo
+    
+    if [[ "$files_check" == "false" ]]; then
+        log red "❌ Installation appears incomplete. Please re-run installation."
+    else
+        log green "✅ Files are installed correctly. Issue is likely with PATH."
+    fi
+    
+    press_key
 }
 
 setup_log_rotation() {
@@ -2683,6 +2797,7 @@ show_help() {
     echo -e "${CYAN}  logs${NC}           View system logs"
     echo -e "${CYAN}  backup${NC}         Create configuration backup"
     echo -e "${CYAN}  restore${NC}        Restore configuration from backup"
+    echo -e "${CYAN}  diagnose${NC}       Diagnose installation issues"
     echo -e "${CYAN}  version${NC}        Show version information"
     echo -e "${CYAN}  help${NC}           Show this help message"
     echo
@@ -3164,6 +3279,9 @@ main() {
         "daemon-mode")
             check_root
             run_daemon_mode
+            ;;
+        "diagnose"|"fix")
+            diagnose_installation
             ;;
         "version")
             echo "MoonTun v${MOONTUN_VERSION}"

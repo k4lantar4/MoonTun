@@ -38,7 +38,7 @@
 
 ### One-Line Install
 ```bash
-curl -fsSL https://github.com/k4lantar4/moontun/raw/main/moontun.sh | sudo bash -s -- --install
+curl -fsSL https://raw.githubusercontent.com/k4lantar4/moontun/main/moontun.sh | sudo bash -s -- --auto
 ```
 
 ### Manual Installation

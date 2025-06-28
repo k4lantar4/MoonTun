@@ -86,6 +86,1738 @@ get_system_ip() {
 }
 
 # =============================================================================
+# Iran Network Detection & Optimization Functions
+# =============================================================================
+
+detect_iran_network_conditions() {
+    log cyan "🇮🇷 Detecting Iran network conditions..."
+    
+    local iran_indicators=0
+    local total_checks=6
+    
+    # Check 1: DNS filtering detection (Google DNS)
+    if ! timeout 3 nslookup google.com 8.8.8.8 >/dev/null 2>&1; then
+        ((iran_indicators++))
+        log blue "DNS filtering detected"
+    fi
+    
+    # Check 2: Common blocked IPs
+    if ! timeout 2 ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+        ((iran_indicators++))
+        log blue "Google DNS blocked"
+    fi
+    
+    # Check 3: TLS fingerprinting resistance needed
+    if ! timeout 5 curl -s --max-time 3 https://www.google.com >/dev/null 2>&1; then
+        ((iran_indicators++))
+        log blue "HTTPS connectivity issues detected"
+    fi
+    
+    # Check 4: High latency to foreign servers
+    local avg_latency=$(timeout 10 ping -c 3 1.1.1.1 2>/dev/null | tail -1 | awk -F'/' '{print $5}' | cut -d'.' -f1 2>/dev/null || echo "1000")
+    if [[ "${avg_latency:-1000}" -gt 300 ]]; then
+        ((iran_indicators++))
+        log blue "High latency detected: ${avg_latency}ms"
+    fi
+    
+    # Check 5: Packet loss detection
+    local packet_loss=$(timeout 15 ping -c 10 1.1.1.1 2>/dev/null | grep "packet loss" | awk '{print $6}' | cut -d'%' -f1 2>/dev/null || echo "100")
+    if [[ "${packet_loss:-100}" -gt 10 ]]; then
+        ((iran_indicators++))
+        log blue "High packet loss detected: ${packet_loss}%"
+    fi
+    
+    # Check 6: Iran local time zone detection
+    local timezone=$(timedatectl 2>/dev/null | grep "Time zone" | grep -i "tehran\|iran" || echo "")
+    if [[ -n "$timezone" ]]; then
+        ((iran_indicators++))
+        log blue "Iran timezone detected"
+    fi
+    
+    local iran_score=$((iran_indicators * 100 / total_checks))
+    
+    if [[ $iran_score -ge 50 ]]; then
+        echo "iran_detected"
+        log yellow "🇮🇷 Iran network conditions detected ($iran_score% confidence)"
+        apply_iran_optimizations
+    else
+        echo "normal_network"
+        log green "🌍 Normal network conditions detected ($iran_score% Iran indicators)"
+    fi
+    
+    # Store detection result
+    echo "IRAN_NETWORK_DETECTED=$([[ $iran_score -ge 50 ]] && echo "true" || echo "false")" >> "$STATUS_FILE"
+    echo "IRAN_CONFIDENCE_SCORE=$iran_score" >> "$STATUS_FILE"
+}
+
+apply_iran_optimizations() {
+    log yellow "🇮🇷 Applying Iran-specific optimizations..."
+    
+    # Force TCP with enhanced settings
+    PROTOCOL="tcp"
+    ENABLED_PROTOCOLS="tcp,ws,udp"
+    
+    # Multiple port strategy for DPI evasion
+    ADDITIONAL_PORTS="443,80,53,8080,8443,1194,1723"
+    
+    # Enhanced encryption and obfuscation
+    ENCRYPTION="true"
+    TLS_OBFUSCATION="true"
+    
+    # Enable packet fragmentation to avoid DPI
+    PACKET_FRAGMENTATION="true"
+    
+    # Use Iran-friendly DNS servers
+    BACKUP_DNS="178.22.122.100,185.51.200.2,10.202.10.10,10.202.10.11"
+    
+    # Optimize for high latency conditions
+    TCP_WINDOW_SCALING="true"
+    TCP_CONGESTION_CONTROL="bbr"
+    
+    # Enable connection persistence
+    KEEP_ALIVE_ENABLED="true"
+    KEEP_ALIVE_INTERVAL="30"
+    
+    log green "✅ Iran optimizations applied"
+}
+
+setup_iran_dns_optimization() {
+    log cyan "🌐 Setting up Iran DNS optimization..."
+    
+    # Backup original resolv.conf
+    if [[ -f "/etc/resolv.conf" ]] && [[ ! -f "/etc/resolv.conf.moontun.backup" ]]; then
+        cp /etc/resolv.conf /etc/resolv.conf.moontun.backup
+    fi
+    
+    # Create optimized resolv.conf for Iran
+    cat > /etc/resolv.conf.moontun << 'EOF'
+# MoonTun optimized DNS for Iran
+nameserver 178.22.122.100
+nameserver 185.51.200.2
+nameserver 10.202.10.10
+nameserver 10.202.10.11
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+
+options timeout:2
+options attempts:3
+options rotate
+options single-request-reopen
+EOF
+
+    # Apply the optimized DNS
+    cp /etc/resolv.conf.moontun /etc/resolv.conf
+    
+    log green "✅ DNS optimization applied"
+}
+
+restore_original_dns() {
+    if [[ -f "/etc/resolv.conf.moontun.backup" ]]; then
+        cp /etc/resolv.conf.moontun.backup /etc/resolv.conf
+        log green "✅ Original DNS restored"
+    fi
+}
+
+# =============================================================================
+# Advanced Multi-Path & Load Balancing Functions
+# =============================================================================
+
+setup_multipath_routing() {
+    log cyan "🌐 Setting up intelligent multi-path routing..."
+    
+    # Load configuration
+    source "$MAIN_CONFIG" 2>/dev/null || return 1
+    
+    if [[ -z "$REMOTE_SERVER" ]]; then
+        log yellow "No remote servers configured for multi-path"
+        return 1
+    fi
+    
+    # Read multiple foreign servers
+    IFS=',' read -ra FOREIGN_SERVERS <<< "$REMOTE_SERVER"
+    
+    if [[ ${#FOREIGN_SERVERS[@]} -lt 2 ]]; then
+        log yellow "Multi-path requires at least 2 servers, found ${#FOREIGN_SERVERS[@]}"
+        return 1
+    fi
+    
+    log cyan "🔍 Setting up paths for ${#FOREIGN_SERVERS[@]} servers"
+    
+    # Create multiple tunnel instances
+    local instance_count=0
+    local successful_instances=0
+    
+    for server in "${FOREIGN_SERVERS[@]}"; do
+        server=$(echo "$server" | xargs)  # trim whitespace
+        if [[ -n "$server" ]]; then
+            if start_tunnel_instance "$server" "$instance_count"; then
+                ((successful_instances++))
+            fi
+            ((instance_count++))
+        fi
+    done
+    
+    if [[ $successful_instances -gt 0 ]]; then
+        # Setup ECMP routing for successful instances
+        setup_ecmp_routing "${FOREIGN_SERVERS[@]}"
+        
+        # Start path monitoring
+        start_path_quality_monitor
+        
+        log green "✅ Multi-path routing established with $successful_instances active paths"
+        return 0
+    else
+        log red "❌ Failed to establish any tunnel instances"
+        return 1
+    fi
+}
+
+start_tunnel_instance() {
+    local server="$1"
+    local instance_id="$2"
+    local instance_port=$((PORT + instance_id))
+    local instance_ip="10.10.1$instance_id.1"
+    
+    log cyan "🚀 Starting tunnel instance $instance_id to $server"
+    
+    # Validate server connectivity first
+    if ! timeout 5 nc -z "$server" "$PORT" 2>/dev/null; then
+        log yellow "⚠️ Server $server:$PORT not reachable, skipping instance $instance_id"
+        return 1
+    fi
+    
+    # Start EasyTier instance
+    nohup "$DEST_DIR/easytier-core" \
+        -i "$instance_ip" \
+        --peers "tcp://$server:$PORT" \
+        --listeners "tcp://0.0.0.0:$instance_port" \
+        --hostname "moon-iran-$instance_id" \
+        --network-secret "$NETWORK_SECRET-$instance_id" \
+        --multi-thread \
+        --default-protocol tcp \
+        --instance-name "iran-$instance_id" \
+        --console-log-level warn \
+        > "$LOG_DIR/easytier_$instance_id.log" 2>&1 &
+        
+    local pid=$!
+    echo $pid > "$CONFIG_DIR/tunnel_$instance_id.pid"
+    
+    # Wait and verify instance startup
+    sleep 5
+    
+    if kill -0 "$pid" 2>/dev/null; then
+        log green "✅ Instance $instance_id started successfully (PID: $pid)"
+        echo "TUNNEL_INSTANCE_${instance_id}_SERVER=$server" >> "$STATUS_FILE"
+        echo "TUNNEL_INSTANCE_${instance_id}_PID=$pid" >> "$STATUS_FILE"
+        echo "TUNNEL_INSTANCE_${instance_id}_PORT=$instance_port" >> "$STATUS_FILE"
+        return 0
+    else
+        log red "❌ Instance $instance_id failed to start"
+        rm -f "$CONFIG_DIR/tunnel_$instance_id.pid"
+        return 1
+    fi
+}
+
+setup_ecmp_routing() {
+    local servers=("$@")
+    log cyan "⚡ Setting up ECMP routing for ${#servers[@]} paths"
+    
+    # Clear existing multi-path routes
+    ip route del default 2>/dev/null || true
+    
+    # Create routing tables for each instance
+    for i in "${!servers[@]}"; do
+        local instance_ip="10.10.1$i.1"
+        local table_id=$((100 + i))
+        
+        # Create custom routing table
+        ip route add default via "$instance_ip" table "$table_id" 2>/dev/null || true
+        ip route add "${instance_ip}/32" dev lo table "$table_id" 2>/dev/null || true
+        
+        # Create policy routing rule
+        ip rule add fwmark "$((i + 1))" table "$table_id" 2>/dev/null || true
+        
+        log blue "📋 Created routing table $table_id for instance $i"
+    done
+    
+    # Setup iptables for load balancing
+    setup_iptables_load_balancing "${#servers[@]}"
+    
+    log green "✅ ECMP routing configured"
+}
+
+setup_iptables_load_balancing() {
+    local instance_count="$1"
+    
+    log cyan "🔧 Setting up iptables load balancing for $instance_count instances"
+    
+    # Create new chain for load balancing
+    iptables -t mangle -N MOONTUN_LB 2>/dev/null || iptables -t mangle -F MOONTUN_LB
+    
+    # Add load balancing rules
+    for ((i=0; i<instance_count; i++)); do
+        local probability=$((100 / (instance_count - i)))
+        local mark=$((i + 1))
+        
+        if [[ $i -eq $((instance_count - 1)) ]]; then
+            # Last instance gets all remaining traffic
+            iptables -t mangle -A MOONTUN_LB -j MARK --set-mark "$mark"
+        else
+            # Probabilistic distribution
+            iptables -t mangle -A MOONTUN_LB -m statistic --mode random --probability "0.$(printf "%02d" $probability)" -j MARK --set-mark "$mark"
+        fi
+        
+        log blue "📊 Instance $i: mark=$mark, probability=${probability}%"
+    done
+    
+    # Apply load balancing to output traffic
+    iptables -t mangle -A OUTPUT -j MOONTUN_LB 2>/dev/null || true
+    
+    log green "✅ Load balancing rules applied"
+}
+
+start_path_quality_monitor() {
+    log cyan "📊 Starting path quality monitoring..."
+    
+    # Kill existing path monitor
+    pkill -f "moontun_path_monitor" 2>/dev/null || true
+    
+    # Start background path monitor
+    (path_quality_monitor_loop) &
+    local monitor_pid=$!
+    echo $monitor_pid > "$CONFIG_DIR/path_monitor.pid"
+    
+    log green "✅ Path monitoring started (PID: $monitor_pid)"
+}
+
+path_quality_monitor_loop() {
+    while true; do
+        monitor_all_paths
+        sleep "${MONITOR_INTERVAL:-30}"
+    done
+}
+
+monitor_all_paths() {
+    local instance_count=0
+    
+    # Count active instances
+    for pid_file in "$CONFIG_DIR"/tunnel_*.pid; do
+        if [[ -f "$pid_file" ]]; then
+            local pid=$(cat "$pid_file" 2>/dev/null)
+            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+                ((instance_count++))
+            else
+                # Clean up dead instance
+                local instance_id=$(basename "$pid_file" .pid | cut -d'_' -f2)
+                cleanup_dead_instance "$instance_id"
+            fi
+        fi
+    done
+    
+    if [[ $instance_count -eq 0 ]]; then
+        log red "🚨 All tunnel instances are down! Attempting recovery..."
+        recover_all_instances
+    else
+        log blue "📊 Path monitoring: $instance_count active instances"
+    fi
+}
+
+cleanup_dead_instance() {
+    local instance_id="$1"
+    
+    log yellow "🧹 Cleaning up dead instance $instance_id"
+    
+    # Remove PID file
+    rm -f "$CONFIG_DIR/tunnel_${instance_id}.pid"
+    
+    # Clean up routing
+    local table_id=$((100 + instance_id))
+    ip route flush table "$table_id" 2>/dev/null || true
+    ip rule del fwmark "$((instance_id + 1))" 2>/dev/null || true
+    
+    # Remove from status file
+    sed -i "/TUNNEL_INSTANCE_${instance_id}_/d" "$STATUS_FILE" 2>/dev/null || true
+}
+
+recover_all_instances() {
+    log cyan "🔄 Attempting to recover all tunnel instances..."
+    
+    # Stop any remaining processes
+    pkill -f "easytier-core" 2>/dev/null || true
+    sleep 3
+    
+    # Restart multi-path routing
+    setup_multipath_routing
+}
+
+# =============================================================================
+# Smart Protocol & Port Hopping Functions
+# =============================================================================
+
+start_adaptive_tunneling() {
+    log cyan "🔄 Starting adaptive anti-censorship tunneling..."
+    
+    # Define port pools based on Iran network conditions
+    local common_ports=(80 443 53 8080 8443 1194 1723 500 4500 2222 9999)
+    local iran_safe_ports=(443 53 80 8080 993 995 465 587)
+    local random_ports=($(shuf -i 10000-65000 -n 10))
+    
+    # Choose port pool based on network detection
+    local port_pool=("${common_ports[@]}")
+    if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+        port_pool=("${iran_safe_ports[@]}" "${random_ports[@]}")
+        log blue "🇮🇷 Using Iran-optimized port pool"
+    else
+        port_pool=("${common_ports[@]}" "${random_ports[@]}")
+        log blue "🌍 Using standard port pool"
+    fi
+    
+    # Define protocol pool
+    local protocols=(tcp udp ws)
+    if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+        protocols=(tcp ws tcp)  # Prefer TCP and WebSocket for Iran
+    fi
+    
+    # Start hopping routine
+    (adaptive_hop_routine "${port_pool[@]}") &
+    local hop_pid=$!
+    echo $hop_pid > "$CONFIG_DIR/hopping.pid"
+    
+    log green "✅ Adaptive tunneling started (PID: $hop_pid)"
+}
+
+adaptive_hop_routine() {
+    local ports=("$@")
+    local current_port_index=0
+    local current_protocol_index=0
+    local protocols=(tcp udp ws)
+    local consecutive_failures=0
+    local max_failures=3
+    
+    if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+        protocols=(tcp ws tcp)  # Iran-optimized protocols
+    fi
+    
+    while true; do
+        local current_port="${ports[$current_port_index]}"
+        local current_protocol="${protocols[$current_protocol_index]}"
+        
+        log blue "🔄 Testing connection: $current_protocol://$REMOTE_SERVER:$current_port"
+        
+        # Test connection quality
+        if test_connection_quality "$current_protocol" "$current_port"; then
+            log green "✅ Stable connection found: $current_protocol:$current_port"
+            
+            # Update tunnel configuration
+            if update_tunnel_config "$current_protocol" "$current_port"; then
+                consecutive_failures=0
+                
+                # Use this config for 5-15 minutes (shorter for Iran conditions)
+                local sleep_duration=300
+                if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+                    sleep_duration=$((180 + RANDOM % 300))  # 3-8 minutes for Iran
+                else
+                    sleep_duration=$((300 + RANDOM % 600))  # 5-15 minutes for normal
+                fi
+                
+                log blue "💤 Using stable connection for $((sleep_duration / 60)) minutes"
+                sleep "$sleep_duration"
+            else
+                log yellow "⚠️ Failed to apply configuration, trying next..."
+                ((consecutive_failures++))
+            fi
+        else
+            log yellow "❌ Connection failed, trying next..."
+            ((consecutive_failures++))
+        fi
+        
+        # Emergency mode if too many failures
+        if [[ $consecutive_failures -ge $max_failures ]]; then
+            log red "🚨 Multiple failures detected, entering emergency mode"
+            emergency_connection_mode
+            consecutive_failures=0
+        fi
+        
+        # Move to next port/protocol
+        current_port_index=$(((current_port_index + 1) % ${#ports[@]}))
+        if [[ $current_port_index -eq 0 ]]; then
+            current_protocol_index=$(((current_protocol_index + 1) % ${#protocols[@]}))
+        fi
+        
+        # Short delay between attempts
+        sleep $((5 + RANDOM % 10))
+    done
+}
+
+test_connection_quality() {
+    local protocol="$1"
+    local port="$2"
+    local quality_score=0
+    local max_score=4
+    
+    # Test 1: Basic connectivity
+    case "$protocol" in
+        "tcp")
+            if timeout 5 nc -z "$REMOTE_SERVER" "$port" 2>/dev/null; then
+                ((quality_score++))
+            fi
+            ;;
+        "udp") 
+            if timeout 5 nc -u -z "$REMOTE_SERVER" "$port" 2>/dev/null; then
+                ((quality_score++))
+            fi
+            ;;
+        "ws")
+            if timeout 5 curl -s --max-time 3 "http://$REMOTE_SERVER:$port" >/dev/null 2>&1; then
+                ((quality_score++))
+            fi
+            ;;
+    esac
+    
+    # Test 2: Latency check
+    local latency=$(timeout 5 ping -c 2 "$REMOTE_SERVER" 2>/dev/null | tail -1 | awk -F'/' '{print $5}' | cut -d'.' -f1 2>/dev/null || echo "999")
+    if [[ "${latency:-999}" -lt 500 ]]; then
+        ((quality_score++))
+    fi
+    
+    # Test 3: Packet loss check
+    local packet_loss=$(timeout 10 ping -c 5 "$REMOTE_SERVER" 2>/dev/null | grep "packet loss" | awk '{print $6}' | cut -d'%' -f1 2>/dev/null || echo "100")
+    if [[ "${packet_loss:-100}" -lt 20 ]]; then
+        ((quality_score++))
+    fi
+    
+    # Test 4: Sustained connection test
+    if timeout 10 curl -s --max-time 8 "http://$REMOTE_SERVER:80" >/dev/null 2>&1; then
+        ((quality_score++))
+    fi
+    
+    local quality_percentage=$((quality_score * 100 / max_score))
+    log blue "🔍 Connection quality: $quality_score/$max_score ($quality_percentage%)"
+    
+    # Return success if quality is acceptable
+    [[ $quality_score -ge 2 ]]
+}
+
+update_tunnel_config() {
+    local new_protocol="$1"
+    local new_port="$2"
+    
+    log cyan "🔧 Updating tunnel configuration: $new_protocol:$new_port"
+    
+    # Update configuration file
+    if [[ -f "$MAIN_CONFIG" ]]; then
+        sed -i "s/PROTOCOL=\".*\"/PROTOCOL=\"$new_protocol\"/" "$MAIN_CONFIG" || return 1
+        sed -i "s/PORT=\".*\"/PORT=\"$new_port\"/" "$MAIN_CONFIG" || return 1
+        
+        # Reload configuration
+        source "$MAIN_CONFIG"
+        
+        # Restart tunnel with new config
+        if restart_tunnel_with_new_config; then
+            log green "✅ Configuration updated successfully"
+            
+            # Log the change
+            echo "$(date): Protocol switched to $new_protocol:$new_port" >> "$LOG_DIR/protocol_switches.log"
+            echo "CURRENT_PROTOCOL=$new_protocol" > "$STATUS_FILE.tmp"
+            echo "CURRENT_PORT=$new_port" >> "$STATUS_FILE.tmp"
+            cat "$STATUS_FILE.tmp" >> "$STATUS_FILE" 2>/dev/null
+            rm -f "$STATUS_FILE.tmp"
+            
+            return 0
+        else
+            log red "❌ Failed to restart tunnel with new configuration"
+            return 1
+        fi
+    else
+        log red "❌ Configuration file not found"
+        return 1
+    fi
+}
+
+restart_tunnel_with_new_config() {
+    log cyan "🔄 Restarting tunnel with new configuration..."
+    
+    # Stop current tunnel gracefully
+    pkill -TERM -f "easytier-core\|rathole" 2>/dev/null || true
+    sleep 3
+    
+    # Force kill if still running
+    pkill -KILL -f "easytier-core\|rathole" 2>/dev/null || true
+    sleep 2
+    
+    # Start tunnel with new config
+    case "$TUNNEL_MODE" in
+        "easytier")
+            start_easytier_optimized
+            ;;
+        "rathole")
+            start_rathole_optimized
+            ;;
+        "hybrid")
+            start_hybrid_mode_optimized
+            ;;
+        *)
+            log red "Unknown tunnel mode: $TUNNEL_MODE"
+            return 1
+            ;;
+    esac
+}
+
+emergency_connection_mode() {
+    log red "🚨 Entering emergency connection mode!"
+    
+    # Stop all current activities
+    pkill -f "easytier-core\|rathole" 2>/dev/null || true
+    pkill -f "moontun_path_monitor\|adaptive_hop" 2>/dev/null || true
+    
+    # Clean all routes and rules
+    cleanup_emergency_network
+    
+    # Emergency protocol sequence (most reliable for Iran)
+    local emergency_protocols=(tcp tcp ws udp)
+    local emergency_ports=(443 80 53 8080 993 465)
+    
+    log yellow "🚑 Attempting emergency connection sequence..."
+    
+    for protocol in "${emergency_protocols[@]}"; do
+        for port in "${emergency_ports[@]}"; do
+            log yellow "🚑 Emergency attempt: $protocol:$port"
+            
+            if attempt_emergency_connection "$protocol" "$port"; then
+                log green "🎉 Emergency connection established!"
+                
+                # Update config with working emergency settings
+                sed -i "s/PROTOCOL=\".*\"/PROTOCOL=\"$protocol\"/" "$MAIN_CONFIG"
+                sed -i "s/PORT=\".*\"/PORT=\"$port\"/" "$MAIN_CONFIG"
+                
+                # Log emergency recovery
+                echo "$(date): Emergency recovery successful with $protocol:$port" >> "$LOG_DIR/emergency_recovery.log"
+                return 0
+            fi
+            
+            sleep 3
+        done
+    done
+    
+    log red "❌ All emergency attempts failed - manual intervention required"
+    echo "$(date): All emergency attempts failed" >> "$LOG_DIR/emergency_recovery.log"
+    return 1
+}
+
+attempt_emergency_connection() {
+    local protocol="$1"
+    local port="$2"
+    
+    # Quick connectivity test first
+    if ! timeout 3 nc -z "$REMOTE_SERVER" "$port" 2>/dev/null; then
+        return 1
+    fi
+    
+    # Try to establish tunnel
+    case "$protocol" in
+        "tcp")
+            timeout 15 "$DEST_DIR/easytier-core" \
+                -i "${LOCAL_IP}" \
+                --peers "tcp://$REMOTE_SERVER:$port" \
+                --listeners "tcp://0.0.0.0:$port" \
+                --hostname "emergency-$(date +%s)" \
+                --network-secret "$NETWORK_SECRET" \
+                --default-protocol tcp \
+                --multi-thread \
+                --console-log-level error \
+                > "$LOG_DIR/emergency.log" 2>&1 &
+            ;;
+        "udp")
+            timeout 15 "$DEST_DIR/easytier-core" \
+                -i "${LOCAL_IP}" \
+                --peers "udp://$REMOTE_SERVER:$port" \
+                --listeners "udp://0.0.0.0:$port" \
+                --hostname "emergency-$(date +%s)" \
+                --network-secret "$NETWORK_SECRET" \
+                --default-protocol udp \
+                --multi-thread \
+                --console-log-level error \
+                > "$LOG_DIR/emergency.log" 2>&1 &
+            ;;
+        "ws")
+            timeout 15 "$DEST_DIR/easytier-core" \
+                -i "${LOCAL_IP}" \
+                --peers "ws://$REMOTE_SERVER:$port" \
+                --listeners "ws://0.0.0.0:$port" \
+                --hostname "emergency-$(date +%s)" \
+                --network-secret "$NETWORK_SECRET" \
+                --default-protocol ws \
+                --multi-thread \
+                --console-log-level error \
+                > "$LOG_DIR/emergency.log" 2>&1 &
+            ;;
+    esac
+    
+    local pid=$!
+    sleep 8
+    
+    # Check if tunnel is working
+    if kill -0 "$pid" 2>/dev/null && ping -c 2 -W 3 "$REMOTE_IP" >/dev/null 2>&1; then
+        echo $pid > "$CONFIG_DIR/emergency_tunnel.pid"
+        return 0
+    else
+        kill "$pid" 2>/dev/null || true
+        return 1
+    fi
+}
+
+cleanup_emergency_network() {
+    log cyan "🧹 Emergency network cleanup..."
+    
+    # Remove all MoonTun iptables rules
+    iptables -t mangle -F MOONTUN_LB 2>/dev/null || true
+    iptables -t mangle -X MOONTUN_LB 2>/dev/null || true
+    iptables -t mangle -D OUTPUT -j MOONTUN_LB 2>/dev/null || true
+    
+    # Clear all custom routing tables
+    for table_id in {100..120}; do
+        ip route flush table "$table_id" 2>/dev/null || true
+        ip rule del table "$table_id" 2>/dev/null || true
+    done
+    
+    # Clear policy routing rules
+    for mark in {1..20}; do
+        ip rule del fwmark "$mark" 2>/dev/null || true
+    done
+    
+    log green "✅ Emergency cleanup completed"
+}
+
+# =============================================================================
+# Enhanced Health Monitoring Functions
+# =============================================================================
+
+enhanced_health_monitoring() {
+    log cyan "📊 Starting enhanced health monitoring system..."
+    
+    # Kill any existing enhanced monitor
+    pkill -f "moontun_enhanced_monitor" 2>/dev/null || true
+    
+    # Start enhanced monitoring loop
+    (enhanced_monitor_loop) &
+    local monitor_pid=$!
+    echo $monitor_pid > "$CONFIG_DIR/enhanced_monitor.pid"
+    
+    log green "✅ Enhanced monitoring started (PID: $monitor_pid)"
+}
+
+enhanced_monitor_loop() {
+    local monitor_interval="${MONITOR_INTERVAL:-15}"
+    
+    while true; do
+        local health_metrics=$(collect_health_metrics)
+        local tunnel_quality=$(analyze_tunnel_quality "$health_metrics")
+        local network_conditions=$(detect_network_interference)
+        
+        # Store metrics for analysis
+        echo "$health_metrics" >> "$LOG_DIR/health_metrics.log"
+        
+        # Intelligent decision making based on conditions
+        case "$tunnel_quality" in
+            "excellent")
+                monitor_interval=60
+                log green "📊 System health: Excellent"
+                ;;
+            "good")
+                monitor_interval=30
+                log cyan "📊 System health: Good"
+                ;;
+            "poor")
+                monitor_interval=10
+                log yellow "📊 System health: Poor - Triggering optimization"
+                trigger_tunnel_optimization
+                ;;
+            "critical")
+                monitor_interval=5
+                log red "📊 System health: Critical - Emergency measures"
+                trigger_emergency_recovery
+                ;;
+        esac
+        
+        # Adaptive monitoring based on Iran conditions
+        if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+            monitor_interval=$((monitor_interval / 2))  # More frequent monitoring for Iran
+        fi
+        
+        # Log detailed metrics
+        log blue "Health: $tunnel_quality | Network: $network_conditions | Next check: ${monitor_interval}s"
+        
+        sleep "$monitor_interval"
+    done
+}
+
+collect_health_metrics() {
+    local metrics=""
+    local timestamp=$(date +%s)
+    
+    # Latency metrics (multiple samples for accuracy)
+    local latency_samples=()
+    for i in {1..3}; do
+        local lat=$(timeout 3 ping -c 1 "$REMOTE_IP" 2>/dev/null | grep "time=" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' 2>/dev/null || echo "999")
+        latency_samples+=("$lat")
+        sleep 1
+    done
+    
+    # Calculate average latency
+    local total_latency=0
+    local valid_samples=0
+    for lat in "${latency_samples[@]}"; do
+        if [[ "$lat" != "999" ]] && [[ -n "$lat" ]]; then
+            total_latency=$(echo "$total_latency + $lat" | bc -l 2>/dev/null || echo "999")
+            ((valid_samples++))
+        fi
+    done
+    
+    local avg_latency="999"
+    if [[ $valid_samples -gt 0 ]]; then
+        avg_latency=$(echo "scale=2; $total_latency / $valid_samples" | bc -l 2>/dev/null || echo "999")
+    fi
+    
+    metrics+="timestamp:$timestamp,"
+    metrics+="latency:${avg_latency},"
+    
+    # Packet loss measurement
+    local packet_loss=$(timeout 15 ping -c 10 "$REMOTE_IP" 2>/dev/null | grep "packet loss" | awk '{print $6}' | cut -d'%' -f1 2>/dev/null || echo "100")
+    metrics+="loss:${packet_loss},"
+    
+    # Bandwidth estimation using curl
+    local bandwidth=0
+    if command -v curl >/dev/null; then
+        bandwidth=$(timeout 10 curl -s --max-time 8 -w "%{speed_download}" -o /dev/null "http://$REMOTE_IP:8080/test" 2>/dev/null || echo "0")
+        bandwidth=$(echo "scale=0; $bandwidth / 1024" | bc -l 2>/dev/null || echo "0")  # Convert to KB/s
+    fi
+    metrics+="bandwidth:$bandwidth,"
+    
+    # Connection stability test
+    local stability=$(check_connection_stability)
+    metrics+="stability:$stability,"
+    
+    # CPU and memory usage
+    local cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1 2>/dev/null || echo "0")
+    local mem_usage=$(free | grep Mem | awk '{printf "%.1f", $3/$2 * 100.0}' 2>/dev/null || echo "0")
+    metrics+="cpu:$cpu_usage,"
+    metrics+="memory:$mem_usage,"
+    
+    # Active connections count
+    local connections=$(ss -tun | grep -c ":$PORT " 2>/dev/null || echo "0")
+    metrics+="connections:$connections,"
+    
+    # DNS resolution time
+    local dns_time=$(timeout 5 time -p nslookup google.com 2>&1 | grep "real" | awk '{print $2}' 2>/dev/null || echo "5.0")
+    metrics+="dns_time:$dns_time"
+    
+    echo "$metrics"
+}
+
+analyze_tunnel_quality() {
+    local metrics="$1"
+    
+    # Extract values from metrics
+    local latency=$(echo "$metrics" | grep -o "latency:[^,]*" | cut -d':' -f2)
+    local loss=$(echo "$metrics" | grep -o "loss:[^,]*" | cut -d':' -f2)
+    local bandwidth=$(echo "$metrics" | grep -o "bandwidth:[^,]*" | cut -d':' -f2)
+    local stability=$(echo "$metrics" | grep -o "stability:[^,]*" | cut -d':' -f2)
+    
+    # Quality scoring algorithm
+    local quality_score=0
+    
+    # Latency scoring (40% weight)
+    if [[ $(echo "${latency:-999} < 100" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        quality_score=$((quality_score + 40))
+    elif [[ $(echo "${latency:-999} < 300" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        quality_score=$((quality_score + 25))
+    elif [[ $(echo "${latency:-999} < 500" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        quality_score=$((quality_score + 15))
+    fi
+    
+    # Packet loss scoring (30% weight)
+    if [[ "${loss:-100}" -lt 1 ]]; then
+        quality_score=$((quality_score + 30))
+    elif [[ "${loss:-100}" -lt 5 ]]; then
+        quality_score=$((quality_score + 20))
+    elif [[ "${loss:-100}" -lt 15 ]]; then
+        quality_score=$((quality_score + 10))
+    fi
+    
+    # Bandwidth scoring (20% weight)
+    if [[ "${bandwidth:-0}" -gt 1000 ]]; then
+        quality_score=$((quality_score + 20))
+    elif [[ "${bandwidth:-0}" -gt 500 ]]; then
+        quality_score=$((quality_score + 15))
+    elif [[ "${bandwidth:-0}" -gt 100 ]]; then
+        quality_score=$((quality_score + 10))
+    fi
+    
+    # Stability scoring (10% weight)
+    if [[ "${stability:-0}" -gt 80 ]]; then
+        quality_score=$((quality_score + 10))
+    elif [[ "${stability:-0}" -gt 60 ]]; then
+        quality_score=$((quality_score + 5))
+    fi
+    
+    # Determine quality level
+    if [[ $quality_score -ge 80 ]]; then
+        echo "excellent"
+    elif [[ $quality_score -ge 60 ]]; then
+        echo "good"
+    elif [[ $quality_score -ge 30 ]]; then
+        echo "poor"
+    else
+        echo "critical"
+    fi
+}
+
+check_connection_stability() {
+    local stability_tests=5
+    local successful_tests=0
+    
+    for ((i=1; i<=stability_tests; i++)); do
+        if timeout 3 ping -c 1 "$REMOTE_IP" >/dev/null 2>&1; then
+            ((successful_tests++))
+        fi
+        sleep 1
+    done
+    
+    local stability_percentage=$((successful_tests * 100 / stability_tests))
+    echo "$stability_percentage"
+}
+
+detect_network_interference() {
+    local interference_score=0
+    local max_score=4
+    
+    # Check for DPI interference (Iran-specific)
+    if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+        # Test HTTPS connectivity to common sites
+        if ! timeout 5 curl -s --max-time 3 https://www.google.com >/dev/null 2>&1; then
+            ((interference_score++))
+        fi
+        
+        # Test DNS over HTTPS
+        if ! timeout 5 curl -s --max-time 3 "https://1.1.1.1/dns-query?name=google.com&type=A" >/dev/null 2>&1; then
+            ((interference_score++))
+        fi
+    fi
+    
+    # Check for unusual latency patterns (QoS throttling)
+    local current_latency=$(timeout 5 ping -c 1 "$REMOTE_IP" 2>/dev/null | grep "time=" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' || echo "999")
+    local historical_latency=$(tail -5 "$LOG_DIR/health_metrics.log" 2>/dev/null | grep -o "latency:[^,]*" | cut -d':' -f2 | tail -1 || echo "100")
+    
+    if [[ -n "$current_latency" ]] && [[ -n "$historical_latency" ]] && [[ "$current_latency" != "999" ]] && [[ "$historical_latency" != "999" ]]; then
+        local latency_increase=$(echo "scale=2; ($current_latency - $historical_latency) / $historical_latency * 100" | bc -l 2>/dev/null || echo "0")
+        if [[ $(echo "$latency_increase > 50" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+            ((interference_score++))
+        fi
+    fi
+    
+    # Check for port blocking patterns
+    if ! timeout 3 nc -z "$REMOTE_SERVER" "$PORT" 2>/dev/null; then
+        ((interference_score++))
+    fi
+    
+    # Classify interference level
+    local interference_percentage=$((interference_score * 100 / max_score))
+    
+    if [[ $interference_percentage -ge 75 ]]; then
+        echo "high"
+    elif [[ $interference_percentage -ge 50 ]]; then
+        echo "medium"
+    elif [[ $interference_percentage -ge 25 ]]; then
+        echo "low"
+    else
+        echo "none"
+    fi
+}
+
+trigger_tunnel_optimization() {
+    log cyan "🔧 Triggering tunnel optimization..."
+    
+    # Apply Iran-specific optimizations if detected
+    if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+        apply_iran_optimizations
+        setup_iran_dns_optimization
+    fi
+    
+    # Optimize TCP settings
+    optimize_tcp_settings
+    
+    # Try alternative protocols
+    if [[ "$PROTOCOL" == "tcp" ]]; then
+        log blue "💡 Trying WebSocket protocol for better penetration"
+        update_tunnel_config "ws" "$PORT"
+    elif [[ "$PROTOCOL" == "udp" ]]; then
+        log blue "💡 Switching to TCP for better reliability"
+        update_tunnel_config "tcp" "$PORT"
+    fi
+}
+
+optimize_tcp_settings() {
+    log cyan "🔧 Applying TCP optimizations..."
+    
+    # TCP congestion control for high latency
+    echo 'bbr' > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null || true
+    
+    # TCP window scaling
+    echo 1 > /proc/sys/net/ipv4/tcp_window_scaling 2>/dev/null || true
+    
+    # TCP keepalive settings
+    echo 30 > /proc/sys/net/ipv4/tcp_keepalive_time 2>/dev/null || true
+    echo 5 > /proc/sys/net/ipv4/tcp_keepalive_intvl 2>/dev/null || true
+    echo 3 > /proc/sys/net/ipv4/tcp_keepalive_probes 2>/dev/null || true
+    
+    # TCP buffer sizes
+    echo "4096 87380 16777216" > /proc/sys/net/ipv4/tcp_rmem 2>/dev/null || true
+    echo "4096 65536 16777216" > /proc/sys/net/ipv4/tcp_wmem 2>/dev/null || true
+    
+    log green "✅ TCP optimizations applied"
+}
+
+trigger_emergency_recovery() {
+    log red "🚨 Triggering emergency recovery procedures..."
+    
+    # Stop all tunnel processes
+    pkill -KILL -f "easytier-core\|rathole" 2>/dev/null || true
+    
+    # Stop all monitoring
+    pkill -KILL -f "moontun.*monitor" 2>/dev/null || true
+    
+    # Emergency network reset
+    cleanup_emergency_network
+    
+    # Try emergency connection mode
+    if emergency_connection_mode; then
+        log green "✅ Emergency recovery successful"
+        
+        # Restart monitoring with reduced frequency
+        MONITOR_INTERVAL=60
+        enhanced_health_monitoring
+    else
+        log red "❌ Emergency recovery failed - system requires manual intervention"
+        
+        # Log critical failure
+        echo "$(date): CRITICAL FAILURE - Manual intervention required" >> "$LOG_DIR/critical_failures.log"
+        
+        # Send notification if possible
+        notify_critical_failure
+    fi
+}
+
+notify_critical_failure() {
+    log red "📢 Sending critical failure notification..."
+    
+    # Try to notify via multiple channels
+    local notification_msg="MoonTun Critical Failure at $(date) on $(hostname). Manual intervention required."
+    
+    # Log to system journal
+    logger -p daemon.crit "$notification_msg" 2>/dev/null || true
+    
+    # Create failure marker file
+    echo "$notification_msg" > "$CONFIG_DIR/CRITICAL_FAILURE_$(date +%Y%m%d_%H%M%S)"
+    
+    # If curl is available, try webhook notification
+    if command -v curl >/dev/null && [[ -n "${WEBHOOK_URL:-}" ]]; then
+        curl -s -X POST -H "Content-Type: application/json" \
+            -d "{\"text\":\"$notification_msg\"}" \
+            "$WEBHOOK_URL" 2>/dev/null || true
+    fi
+}
+
+# =============================================================================
+# Geographic Load Balancing Functions
+# =============================================================================
+
+setup_geo_load_balancing() {
+    log cyan "🌍 Setting up geographic load balancing..."
+    
+    # Load configuration
+    source "$MAIN_CONFIG" 2>/dev/null || return 1
+    
+    if [[ -z "$REMOTE_SERVER" ]]; then
+        log yellow "No remote servers configured for geo load balancing"
+        return 1
+    fi
+    
+    # Test all foreign servers
+    declare -A server_metrics
+    local server_count=0
+    
+    IFS=',' read -ra SERVERS <<< "$REMOTE_SERVER"
+    
+    log cyan "🧪 Testing ${#SERVERS[@]} servers for geo load balancing..."
+    
+    for server in "${SERVERS[@]}"; do
+        server=$(echo "$server" | xargs)  # trim whitespace
+        if [[ -n "$server" ]]; then
+            log blue "🔍 Testing server: $server"
+            
+            local latency=$(test_server_latency "$server")
+            local stability=$(test_server_stability "$server")
+            local bandwidth=$(test_server_bandwidth "$server")
+            local location=$(detect_server_location "$server")
+            
+            # Calculate composite score
+            local score=$(calculate_server_score "$latency" "$stability" "$bandwidth" "$location")
+            server_metrics["$server"]="$score:$latency:$stability:$bandwidth:$location"
+            
+            log blue "Server $server: Latency=${latency}ms, Stability=$stability%, Bandwidth=${bandwidth}KB/s, Location=$location, Score=$score"
+            ((server_count++))
+        fi
+    done
+    
+    if [[ $server_count -eq 0 ]]; then
+        log red "No valid servers found for geo load balancing"
+        return 1
+    fi
+    
+    # Sort servers by score
+    local best_servers=""
+    for server in "${!server_metrics[@]}"; do
+        local score=$(echo "${server_metrics[$server]}" | cut -d':' -f1)
+        echo "$score $server"
+    done | sort -nr | while read score server; do
+        if [[ -z "$best_servers" ]]; then
+            best_servers="$server"
+        else
+            best_servers="$best_servers,$server"
+        fi
+        
+        # Log server ranking
+        local metrics="${server_metrics[$server]}"
+        local latency=$(echo "$metrics" | cut -d':' -f2)
+        local stability=$(echo "$metrics" | cut -d':' -f3)
+        local bandwidth=$(echo "$metrics" | cut -d':' -f4)
+        local location=$(echo "$metrics" | cut -d':' -f5)
+        
+        log green "🏆 Rank: $server (Score: $score, ${latency}ms, ${stability}%, ${bandwidth}KB/s, $location)"
+    done
+    
+    # Update configuration with best servers (top 3)
+    local top_servers=$(for server in "${!server_metrics[@]}"; do
+        local score=$(echo "${server_metrics[$server]}" | cut -d':' -f1)
+        echo "$score $server"
+    done | sort -nr | head -3 | awk '{print $2}' | tr '\n' ',' | sed 's/,$//')
+    
+    if [[ -n "$top_servers" ]]; then
+        log cyan "📝 Updating configuration with top servers: $top_servers"
+        sed -i "s/REMOTE_SERVER=\".*\"/REMOTE_SERVER=\"$top_servers\"/" "$MAIN_CONFIG"
+        
+        # Store geo metrics for monitoring
+        echo "GEO_BALANCING_ENABLED=true" >> "$STATUS_FILE"
+        echo "LAST_GEO_UPDATE=$(date +%s)" >> "$STATUS_FILE"
+        echo "TOP_SERVERS=$top_servers" >> "$STATUS_FILE"
+        
+        log green "✅ Geo load balancing configured with $top_servers"
+        return 0
+    else
+        log red "❌ Failed to select top servers"
+        return 1
+    fi
+}
+
+test_server_latency() {
+    local server="$1"
+    local total_latency=0
+    local valid_tests=0
+    local test_count=5
+    
+    for ((i=1; i<=test_count; i++)); do
+        local latency=$(timeout 5 ping -c 1 "$server" 2>/dev/null | grep "time=" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' 2>/dev/null || echo "999")
+        if [[ "$latency" != "999" ]] && [[ -n "$latency" ]]; then
+            total_latency=$(echo "$total_latency + $latency" | bc -l 2>/dev/null || echo "999")
+            ((valid_tests++))
+        fi
+        sleep 0.5
+    done
+    
+    if [[ $valid_tests -gt 0 ]]; then
+        local avg_latency=$(echo "scale=1; $total_latency / $valid_tests" | bc -l 2>/dev/null || echo "999")
+        echo "$avg_latency"
+    else
+        echo "999"
+    fi
+}
+
+test_server_stability() {
+    local server="$1"
+    local successful_tests=0
+    local total_tests=10
+    
+    for ((i=1; i<=total_tests; i++)); do
+        if timeout 3 ping -c 1 "$server" >/dev/null 2>&1; then
+            ((successful_tests++))
+        fi
+        sleep 0.2
+    done
+    
+    local stability_percentage=$((successful_tests * 100 / total_tests))
+    echo "$stability_percentage"
+}
+
+test_server_bandwidth() {
+    local server="$1"
+    local bandwidth=0
+    
+    # Try HTTP speed test
+    if timeout 8 curl -s --max-time 6 -w "%{speed_download}" -o /dev/null "http://$server:80" 2>/dev/null | grep -q "[0-9]"; then
+        bandwidth=$(timeout 8 curl -s --max-time 6 -w "%{speed_download}" -o /dev/null "http://$server:80" 2>/dev/null || echo "0")
+        bandwidth=$(echo "scale=0; $bandwidth / 1024" | bc -l 2>/dev/null || echo "0")
+    fi
+    
+    # Fallback: estimate based on ping variance
+    if [[ "$bandwidth" == "0" ]]; then
+        local ping_variance=$(timeout 10 ping -c 5 "$server" 2>/dev/null | grep "min/avg/max/mdev" | awk -F'/' '{print $5}' | cut -d' ' -f1 2>/dev/null || echo "100")
+        # Lower variance = better bandwidth estimate
+        bandwidth=$(echo "scale=0; 1000 / (1 + $ping_variance)" | bc -l 2>/dev/null || echo "10")
+    fi
+    
+    echo "$bandwidth"
+}
+
+detect_server_location() {
+    local server="$1"
+    local location="unknown"
+    
+    # Try to detect location using various methods
+    if command -v curl >/dev/null; then
+        # Method 1: IP geolocation API
+        location=$(timeout 5 curl -s "http://ip-api.com/json/$server" 2>/dev/null | grep -o '"country":"[^"]*' | cut -d'"' -f4 2>/dev/null || echo "unknown")
+        
+        # Method 2: Whois data if first method fails
+        if [[ "$location" == "unknown" ]] || [[ -z "$location" ]]; then
+            location=$(timeout 5 whois "$server" 2>/dev/null | grep -i "country" | head -1 | awk '{print $NF}' 2>/dev/null || echo "unknown")
+        fi
+    fi
+    
+    # Method 3: Latency-based guess for Iran optimization
+    if [[ "$location" == "unknown" ]]; then
+        local latency=$(timeout 3 ping -c 1 "$server" 2>/dev/null | grep "time=" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' 2>/dev/null || echo "999")
+        if [[ -n "$latency" ]] && [[ "$latency" != "999" ]]; then
+            if [[ $(echo "$latency < 50" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+                location="local"
+            elif [[ $(echo "$latency < 150" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+                location="regional"
+            else
+                location="distant"
+            fi
+        fi
+    fi
+    
+    echo "$location"
+}
+
+calculate_server_score() {
+    local latency="$1"
+    local stability="$2"
+    local bandwidth="$3"
+    local location="$4"
+    
+    local score=0
+    
+    # Latency scoring (35% weight) - Lower is better
+    if [[ $(echo "${latency:-999} < 50" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        score=$((score + 35))
+    elif [[ $(echo "${latency:-999} < 100" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        score=$((score + 30))
+    elif [[ $(echo "${latency:-999} < 200" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        score=$((score + 25))
+    elif [[ $(echo "${latency:-999} < 300" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        score=$((score + 15))
+    elif [[ $(echo "${latency:-999} < 500" | bc -l 2>/dev/null || echo 0) -eq 1 ]]; then
+        score=$((score + 5))
+    fi
+    
+    # Stability scoring (30% weight)
+    if [[ "${stability:-0}" -gt 90 ]]; then
+        score=$((score + 30))
+    elif [[ "${stability:-0}" -gt 80 ]]; then
+        score=$((score + 25))
+    elif [[ "${stability:-0}" -gt 70 ]]; then
+        score=$((score + 20))
+    elif [[ "${stability:-0}" -gt 50 ]]; then
+        score=$((score + 10))
+    fi
+    
+    # Bandwidth scoring (25% weight)
+    if [[ "${bandwidth:-0}" -gt 1000 ]]; then
+        score=$((score + 25))
+    elif [[ "${bandwidth:-0}" -gt 500 ]]; then
+        score=$((score + 20))
+    elif [[ "${bandwidth:-0}" -gt 200 ]]; then
+        score=$((score + 15))
+    elif [[ "${bandwidth:-0}" -gt 50 ]]; then
+        score=$((score + 10))
+    elif [[ "${bandwidth:-0}" -gt 10 ]]; then
+        score=$((score + 5))
+    fi
+    
+    # Location bonus (10% weight)
+    case "$location" in
+        "local"|"IR"|"Iran") score=$((score + 10)) ;;  # Local servers get highest bonus
+        "regional"|"DE"|"NL"|"UK") score=$((score + 8)) ;;  # European servers good for Iran
+        "US"|"CA") score=$((score + 6)) ;;  # North American servers
+        "distant"|"AS"|"JP") score=$((score + 4)) ;;  # Asian servers
+        *) score=$((score + 2)) ;;  # Unknown locations get minimal bonus
+    esac
+    
+    echo "$score"
+}
+
+schedule_geo_rebalancing() {
+    log cyan "⏰ Scheduling periodic geo rebalancing..."
+    
+    # Kill existing geo scheduler
+    pkill -f "moontun_geo_scheduler" 2>/dev/null || true
+    
+    # Start geo rebalancing scheduler
+    (geo_rebalancing_scheduler) &
+    local scheduler_pid=$!
+    echo $scheduler_pid > "$CONFIG_DIR/geo_scheduler.pid"
+    
+    log green "✅ Geo rebalancing scheduler started (PID: $scheduler_pid)"
+}
+
+geo_rebalancing_scheduler() {
+    local rebalance_interval=$((4 * 3600))  # 4 hours default
+    
+    # Adjust interval based on Iran conditions
+    if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+        rebalance_interval=$((2 * 3600))  # 2 hours for Iran
+    fi
+    
+    while true; do
+        sleep "$rebalance_interval"
+        
+        log cyan "⏰ Scheduled geo rebalancing triggered"
+        
+        # Check if current servers are still performing well
+        if check_current_servers_performance; then
+            log green "✅ Current servers performing well, skipping rebalancing"
+        else
+            log yellow "⚠️ Performance degradation detected, triggering rebalancing"
+            setup_geo_load_balancing
+            
+            # Restart tunnels with new configuration
+            restart_tunnel_with_new_config
+        fi
+    done
+}
+
+check_current_servers_performance() {
+    source "$MAIN_CONFIG" 2>/dev/null || return 1
+    
+    local performance_threshold=60  # Minimum acceptable performance score
+    local failed_servers=0
+    local total_servers=0
+    
+    IFS=',' read -ra SERVERS <<< "$REMOTE_SERVER"
+    
+    for server in "${SERVERS[@]}"; do
+        server=$(echo "$server" | xargs)
+        if [[ -n "$server" ]]; then
+            ((total_servers++))
+            
+            local latency=$(test_server_latency "$server")
+            local stability=$(test_server_stability "$server")
+            local score=$(calculate_server_score "$latency" "$stability" "100" "unknown")
+            
+            if [[ "$score" -lt $performance_threshold ]]; then
+                ((failed_servers++))
+                log yellow "⚠️ Server $server performance degraded (score: $score)"
+            fi
+        fi
+    done
+    
+    # Return success if less than 50% of servers are failing
+    local failure_percentage=$((failed_servers * 100 / total_servers))
+    [[ $failure_percentage -lt 50 ]]
+}
+
+# =============================================================================
+# Optimized EasyTier Functions
+# =============================================================================
+
+start_easytier_optimized() {
+    log cyan "🚇 Starting optimized EasyTier tunnel..."
+    
+    if [[ ! -f "$DEST_DIR/easytier-core" ]]; then
+        log red "EasyTier not installed. Use: moontun install-cores"
+        return 1
+    fi
+    
+    # Load configuration
+    source "$MAIN_CONFIG"
+    
+    # Detect Iran network conditions first
+    local network_type=$(detect_iran_network_conditions)
+    
+    # Build optimized EasyTier command
+    local easytier_cmd="$DEST_DIR/easytier-core"
+    local base_args=""
+    local listeners=""
+    local peers=""
+    local performance_args=""
+    local iran_args=""
+    
+    # Basic configuration
+    base_args="-i $LOCAL_IP --hostname moon-$(hostname | cut -c1-10)-$(date +%s)"
+    base_args="$base_args --network-secret $NETWORK_SECRET"
+    base_args="$base_args --default-protocol $PROTOCOL"
+    
+    # Configure node type and connectivity
+    if [[ "${EASYTIER_NODE_TYPE:-connected}" == "standalone" ]]; then
+        log cyan "🏗️ Starting as optimized standalone node..."
+        
+        # Multi-protocol listeners for maximum compatibility
+        listeners="--listeners"
+        listeners="$listeners tcp://0.0.0.0:$PORT"
+        listeners="$listeners udp://0.0.0.0:$((PORT + 1))"
+        
+        # Add IPv6 support if not Iran
+        if [[ "$network_type" != "iran_detected" ]]; then
+            listeners="$listeners tcp://[::]:$PORT"
+            listeners="$listeners udp://[::]:$((PORT + 1))"
+        fi
+        
+        # WebSocket listener for DPI evasion
+        if [[ "$network_type" == "iran_detected" ]]; then
+            listeners="$listeners ws://0.0.0.0:$((PORT + 2))"
+        fi
+        
+        log cyan "💡 Standalone mode: Waiting for connections on multiple protocols"
+    else
+        log cyan "🔗 Starting as optimized connected node..."
+        
+        if [[ -z "$REMOTE_SERVER" ]]; then
+            log red "Remote server(s) required for connected mode"
+            return 1
+        fi
+        
+        # Multi-protocol listeners
+        listeners="--listeners"
+        listeners="$listeners tcp://0.0.0.0:$PORT"
+        listeners="$listeners udp://0.0.0.0:$((PORT + 1))"
+        
+        # Add WebSocket for Iran
+        if [[ "$network_type" == "iran_detected" ]]; then
+            listeners="$listeners ws://0.0.0.0:$((PORT + 2))"
+        fi
+        
+        # Multi-peer support with protocol diversity
+        local peer_list=""
+        IFS=',' read -ra SERVERS <<< "$REMOTE_SERVER"
+        local server_index=0
+        
+        for server in "${SERVERS[@]}"; do
+            server=$(echo "$server" | xargs)
+            if [[ -n "$server" ]]; then
+                # Use different protocols for different servers
+                case $((server_index % 3)) in
+                    0) peer_list="$peer_list --peers tcp://${server}:${PORT}" ;;
+                    1) peer_list="$peer_list --peers udp://${server}:$((PORT + 1))" ;;
+                    2) 
+                        if [[ "$network_type" == "iran_detected" ]]; then
+                            peer_list="$peer_list --peers ws://${server}:$((PORT + 2))"
+                        else
+                            peer_list="$peer_list --peers tcp://${server}:${PORT}"
+                        fi
+                        ;;
+                esac
+                ((server_index++))
+            fi
+        done
+        peers="$peer_list"
+        
+        log cyan "🎯 Connecting to ${#SERVERS[@]} peers with protocol diversity"
+    fi
+    
+    # Performance optimizations
+    performance_args="--multi-thread"
+    performance_args="$performance_args --enable-exit-node"
+    performance_args="$performance_args --relay-all-peer-rpc"
+    
+    # Advanced features
+    performance_args="$performance_args --rpc-portal 0.0.0.0:$((PORT + 100))"
+    performance_args="$performance_args --vpn-portal wg://0.0.0.0:$((PORT + 300))/10.20.0.0/24"
+    
+    # Iran-specific optimizations
+    if [[ "$network_type" == "iran_detected" ]]; then
+        iran_args="--console-log-level warn"  # Reduce logging for performance
+        iran_args="$iran_args --instance-name iran-$(date +%s)"
+        
+        # Use public IP mapping if available
+        local public_ip=$(get_public_ip)
+        if [[ "$public_ip" != "Unknown" ]] && [[ -n "$public_ip" ]]; then
+            iran_args="$iran_args --mapped-listeners tcp://$public_ip:$PORT"
+        fi
+        
+        # Disable IPv6 for Iran to avoid issues
+        iran_args="$iran_args --disable-ipv6"
+        
+        log blue "🇮🇷 Applied Iran-specific optimizations"
+    else
+        performance_args="$performance_args --console-log-level info"
+    fi
+    
+    # Kill existing processes
+    pkill -f "easytier-core" 2>/dev/null || true
+    sleep 3
+    
+    # Build final command
+    local final_cmd="$easytier_cmd $base_args $listeners $peers $performance_args $iran_args"
+    
+    log cyan "🚀 Starting EasyTier with command:"
+    log blue "$final_cmd"
+    
+    # Start EasyTier with optimized configuration
+    nohup $final_cmd > "$LOG_DIR/easytier_optimized.log" 2>&1 &
+    local easytier_pid=$!
+    
+    # Wait and verify startup
+    sleep 5
+    
+    if kill -0 "$easytier_pid" 2>/dev/null; then
+        echo "ACTIVE_TUNNEL=easytier" > "$STATUS_FILE"
+        echo "NODE_TYPE=${EASYTIER_NODE_TYPE:-connected}" >> "$STATUS_FILE"
+        echo "EASYTIER_PID=$easytier_pid" >> "$STATUS_FILE"
+        echo "NETWORK_TYPE=$network_type" >> "$STATUS_FILE"
+        echo "OPTIMIZED_MODE=true" >> "$STATUS_FILE"
+        
+        log green "✅ Optimized EasyTier started successfully (PID: $easytier_pid)"
+        
+        # Start enhanced monitoring
+        enhanced_health_monitoring
+        
+        # Start adaptive tunneling if Iran detected
+        if [[ "$network_type" == "iran_detected" ]]; then
+            start_adaptive_tunneling
+        fi
+        
+        return 0
+    else
+        log red "❌ Failed to start optimized EasyTier"
+        cat "$LOG_DIR/easytier_optimized.log" | tail -20
+        return 1
+    fi
+}
+
+# =============================================================================
+# Optimized Rathole Functions  
+# =============================================================================
+
+start_rathole_optimized() {
+    log cyan "⚡ Starting optimized Rathole tunnel..."
+    
+    if [[ ! -f "$DEST_DIR/rathole" ]]; then
+        log red "Rathole not installed. Use: moontun install-cores"
+        return 1
+    fi
+    
+    # Load configuration
+    source "$MAIN_CONFIG"
+    
+    # Detect network conditions
+    local network_type=$(detect_iran_network_conditions)
+    
+    # Create optimized Rathole configuration
+    create_optimized_rathole_config "$network_type"
+    
+    # Determine configuration flag based on node type
+    local config_flag=""
+    case "${RATHOLE_NODE_TYPE:-bidirectional}" in
+        "listener"|"server")
+            config_flag="-s"
+            log cyan "🔧 Starting as optimized Rathole server..."
+            ;;
+        "connector"|"client")
+            config_flag="-c"
+            log cyan "🔗 Starting as optimized Rathole client..."
+            ;;
+        "bidirectional"|*)
+            # Intelligent mode selection
+            if [[ -n "$REMOTE_SERVER" ]]; then
+                config_flag="-c"
+                log cyan "🔄 Starting in bidirectional mode as client..."
+            else
+                config_flag="-s"
+                log cyan "🔄 Starting in bidirectional mode as server..."
+            fi
+            ;;
+    esac
+    
+    # Kill existing processes
+    pkill -f "rathole" 2>/dev/null || true
+    sleep 3
+    
+    # Start Rathole with optimized config
+    log cyan "🚀 Starting Rathole: rathole $config_flag $RATHOLE_CONFIG"
+    
+    nohup "$DEST_DIR/rathole" $config_flag "$RATHOLE_CONFIG" \
+        > "$LOG_DIR/rathole_optimized.log" 2>&1 &
+    local rathole_pid=$!
+    
+    # Wait and verify startup
+    sleep 5
+    
+    if kill -0 "$rathole_pid" 2>/dev/null; then
+        echo "ACTIVE_TUNNEL=rathole" > "$STATUS_FILE"
+        echo "NODE_TYPE=${RATHOLE_NODE_TYPE:-bidirectional}" >> "$STATUS_FILE"
+        echo "RATHOLE_PID=$rathole_pid" >> "$STATUS_FILE"
+        echo "NETWORK_TYPE=$network_type" >> "$STATUS_FILE"
+        echo "OPTIMIZED_MODE=true" >> "$STATUS_FILE"
+        
+        log green "✅ Optimized Rathole started successfully (PID: $rathole_pid)"
+        
+        # Start enhanced monitoring
+        enhanced_health_monitoring
+        
+        return 0
+    else
+        log red "❌ Failed to start optimized Rathole"
+        cat "$LOG_DIR/rathole_optimized.log" | tail -20
+        return 1
+    fi
+}
+
+create_optimized_rathole_config() {
+    local network_type="$1"
+    local node_type="${RATHOLE_NODE_TYPE:-bidirectional}"
+    
+    log cyan "📝 Creating optimized Rathole configuration..."
+    
+    # Determine if server or client config
+    local is_server="false"
+    if [[ "$node_type" == "listener" ]] || [[ "$node_type" == "server" ]] || [[ -z "$REMOTE_SERVER" ]]; then
+        is_server="true"
+    fi
+    
+    cat > "$RATHOLE_CONFIG" << EOF
+# Optimized Rathole Configuration for MoonTun v${MOONTUN_VERSION}
+# Network type: $network_type
+# Generated: $(date)
+
+[$([ "$is_server" == "true" ] && echo "server" || echo "client")]
+$([ "$is_server" == "true" ] && echo "bind_addr = \"0.0.0.0:${PORT}\"" || echo "remote_addr = \"${REMOTE_SERVER}:${PORT}\"")
+default_token = "${NETWORK_SECRET}"
+
+# Optimized transport configuration
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").transport]
+type = "${PROTOCOL}"
+
+# TCP optimizations
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").transport.tcp]
+nodelay = true
+keepalive_secs = 30
+keepalive_interval = 5
+keepalive_retries = 3
+EOF
+
+    # Add Iran-specific optimizations
+    if [[ "$network_type" == "iran_detected" ]]; then
+        cat >> "$RATHOLE_CONFIG" << EOF
+
+# Iran-specific TLS configuration for DPI evasion
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").transport.tls]
+hostname = "update.microsoft.com"
+trusted_root = "system"
+EOF
+    fi
+    
+    # Add service configurations
+    cat >> "$RATHOLE_CONFIG" << EOF
+
+# Main tunnel service
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").services.main]
+type = "${PROTOCOL}"
+$([ "$is_server" == "true" ] && echo "bind_addr = \"0.0.0.0:8080\"" || echo "local_addr = \"127.0.0.1:8080\"")
+$([ "$is_server" != "true" ] && echo "remote_addr = \"0.0.0.0:8080\"")
+token = "${NETWORK_SECRET}_main"
+
+# SSH service
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").services.ssh]
+type = "tcp"
+$([ "$is_server" == "true" ] && echo "bind_addr = \"0.0.0.0:2222\"" || echo "local_addr = \"127.0.0.1:22\"")
+$([ "$is_server" != "true" ] && echo "remote_addr = \"0.0.0.0:2222\"")
+token = "${NETWORK_SECRET}_ssh"
+
+# SOCKS5 proxy service
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").services.socks]
+type = "tcp"
+$([ "$is_server" == "true" ] && echo "bind_addr = \"0.0.0.0:1080\"" || echo "local_addr = \"127.0.0.1:1080\"")
+$([ "$is_server" != "true" ] && echo "remote_addr = \"0.0.0.0:1080\"")
+token = "${NETWORK_SECRET}_socks"
+EOF
+
+    # Add Iran-specific services
+    if [[ "$network_type" == "iran_detected" ]]; then
+        cat >> "$RATHOLE_CONFIG" << EOF
+
+# DNS service for Iran
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").services.dns]
+type = "udp"
+$([ "$is_server" == "true" ] && echo "bind_addr = \"0.0.0.0:5353\"" || echo "local_addr = \"127.0.0.1:53\"")
+$([ "$is_server" != "true" ] && echo "remote_addr = \"0.0.0.0:5353\"")
+token = "${NETWORK_SECRET}_dns"
+
+# HTTPS service for web traffic
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").services.https]
+type = "tcp"
+$([ "$is_server" == "true" ] && echo "bind_addr = \"0.0.0.0:8443\"" || echo "local_addr = \"127.0.0.1:443\"")
+$([ "$is_server" != "true" ] && echo "remote_addr = \"0.0.0.0:8443\"")
+token = "${NETWORK_SECRET}_https"
+EOF
+    fi
+    
+    # Add performance optimizations
+    cat >> "$RATHOLE_CONFIG" << EOF
+
+# Performance optimizations
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").services.main.nodelay]
+enabled = true
+
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").services.main.compress]
+enabled = $([[ "${COMPRESSION:-true}" == "true" ]] && echo "true" || echo "false")
+algorithm = "zstd"
+
+# Heartbeat configuration
+[$([ "$is_server" == "true" ] && echo "server" || echo "client").heartbeat_timeout]
+enabled = true
+interval = $([[ "$network_type" == "iran_detected" ]] && echo "20" || echo "30")
+EOF
+
+    log green "✅ Optimized Rathole configuration created"
+}
+
+start_hybrid_mode_optimized() {
+    log cyan "🔄 Starting optimized hybrid mode (EasyTier + Rathole)..."
+    
+    # Try EasyTier first with optimizations
+    if start_easytier_optimized; then
+        log green "✅ Primary tunnel: Optimized EasyTier active"
+        echo "ACTIVE_TUNNEL=easytier" > "$STATUS_FILE"
+        echo "BACKUP_AVAILABLE=rathole" >> "$STATUS_FILE"
+        echo "HYBRID_MODE=optimized" >> "$STATUS_FILE"
+        
+        # Start backup Rathole instance on different port
+        PORT=$((PORT + 10)) start_rathole_optimized &
+        return 0
+    elif start_rathole_optimized; then
+        log green "✅ Backup tunnel: Optimized Rathole active"
+        echo "ACTIVE_TUNNEL=rathole" > "$STATUS_FILE"
+        echo "BACKUP_AVAILABLE=easytier" >> "$STATUS_FILE"
+        echo "HYBRID_MODE=optimized" >> "$STATUS_FILE"
+        return 0
+    else
+        log red "❌ Both optimized tunnels failed to start"
+        return 1
+    fi
+}
+
+# =============================================================================
 # Installation Functions
 # =============================================================================
 
@@ -582,20 +2314,50 @@ setup_tunnel() {
     echo "🏠 System IP: $system_ip"
     echo
     
-    # Tunnel mode selection
-    log blue "🚇 Select tunnel mode:"
-    echo "1) EasyTier (Recommended for stability)"
-    echo "2) Rathole (High performance)"
-    echo "3) Hybrid (Intelligent switching)"
-    echo
-    read -p "Select mode [1-3]: " mode_choice
+    # Detect Iran network conditions first
+    log cyan "🌍 Detecting network conditions..."
+    local network_type=$(detect_iran_network_conditions)
     
-    case ${mode_choice:-1} in
-        1) TUNNEL_MODE="easytier" ;;
-        2) TUNNEL_MODE="rathole" ;;
-        3) TUNNEL_MODE="hybrid" ;;
-        *) TUNNEL_MODE="easytier" ;;
-    esac
+    if [[ "$network_type" == "iran_detected" ]]; then
+        log yellow "🇮🇷 Iran network detected! Applying optimized settings..."
+        echo "  ✅ Anti-DPI measures will be enabled"
+        echo "  ✅ Iran-friendly DNS servers will be used"
+        echo "  ✅ Protocol hopping will be activated"
+        echo "  ✅ Enhanced encryption will be applied"
+        echo
+    else
+        log green "🌍 Standard network detected"
+        echo
+    fi
+    
+    # Tunnel mode selection with intelligent recommendations
+    log blue "🚇 Select tunnel mode:"
+    if [[ "$network_type" == "iran_detected" ]]; then
+        echo "1) EasyTier (🇮🇷 Recommended for Iran - Multi-protocol support)"
+        echo "2) Rathole (High performance with TLS obfuscation)"
+        echo "3) Hybrid (🌟 Best for Iran - Auto-switching + Anti-DPI)"
+        echo
+        log yellow "💡 For Iran conditions, Hybrid mode is strongly recommended"
+        read -p "Select mode [3]: " mode_choice
+        case ${mode_choice:-3} in
+            1) TUNNEL_MODE="easytier" ;;
+            2) TUNNEL_MODE="rathole" ;;
+            3) TUNNEL_MODE="hybrid" ;;
+            *) TUNNEL_MODE="hybrid" ;;
+        esac
+    else
+        echo "1) EasyTier (Recommended for stability)"
+        echo "2) Rathole (High performance)"
+        echo "3) Hybrid (Intelligent switching)"
+        echo
+        read -p "Select mode [1]: " mode_choice
+        case ${mode_choice:-1} in
+            1) TUNNEL_MODE="easytier" ;;
+            2) TUNNEL_MODE="rathole" ;;
+            3) TUNNEL_MODE="hybrid" ;;
+            *) TUNNEL_MODE="easytier" ;;
+        esac
+    fi
     
     # Node configuration based on tunnel mode
     echo
@@ -661,24 +2423,40 @@ setup_tunnel() {
     read -p "Tunnel port [1377]: " input_port
     PORT=${input_port:-1377}
     
-    # Protocol selection with enhanced options
+    # Protocol selection with Iran-aware recommendations
     echo
     log blue "🔗 Select primary protocol:"
-    echo "1) UDP (Best for stability & speed)"
-    echo "2) TCP (Better penetration & reliability)"
-    echo "3) WebSocket (Maximum compatibility)"
-    echo "4) QUIC (Modern, fast, experimental)"
-    echo "5) WireGuard (High security)"
-    read -p "Protocol [1]: " protocol_choice
-    
-    case ${protocol_choice:-1} in
-        1) PROTOCOL="udp" ;;
-        2) PROTOCOL="tcp" ;;
-        3) PROTOCOL="ws" ;;
-        4) PROTOCOL="quic" ;;
-        5) PROTOCOL="wg" ;;
-        *) PROTOCOL="udp" ;;
-    esac
+    if [[ "$network_type" == "iran_detected" ]]; then
+        echo "1) TCP (🇮🇷 Best for Iran - DPI resistant)"
+        echo "2) WebSocket (🌟 Excellent for Iran - HTTP camouflage)"
+        echo "3) UDP (Good speed but may be filtered)"
+        echo "4) QUIC (Modern but may trigger DPI)"
+        echo
+        log yellow "💡 For Iran, TCP or WebSocket are recommended"
+        read -p "Protocol [1]: " protocol_choice
+        case ${protocol_choice:-1} in
+            1) PROTOCOL="tcp" ;;
+            2) PROTOCOL="ws" ;;
+            3) PROTOCOL="udp" ;;
+            4) PROTOCOL="quic" ;;
+            *) PROTOCOL="tcp" ;;
+        esac
+    else
+        echo "1) UDP (Best for stability & speed)"
+        echo "2) TCP (Better penetration & reliability)"
+        echo "3) WebSocket (Maximum compatibility)"
+        echo "4) QUIC (Modern, fast, experimental)"
+        echo "5) WireGuard (High security)"
+        read -p "Protocol [1]: " protocol_choice
+        case ${protocol_choice:-1} in
+            1) PROTOCOL="udp" ;;
+            2) PROTOCOL="tcp" ;;
+            3) PROTOCOL="ws" ;;
+            4) PROTOCOL="quic" ;;
+            5) PROTOCOL="wg" ;;
+            *) PROTOCOL="udp" ;;
+        esac
+    fi
     
     # Generate network secret
     NETWORK_SECRET=$(generate_secret)
@@ -686,26 +2464,54 @@ setup_tunnel() {
     read -p "Custom secret (or Enter to use generated): " custom_secret
     NETWORK_SECRET=${custom_secret:-$NETWORK_SECRET}
     
-    # Advanced options
+    # Advanced options with Iran-aware defaults
     echo
     log blue "⚙️  Advanced Options:"
-    read -p "Enable automatic failover? [Y/n]: " enable_failover
-    FAILOVER_ENABLED=$([[ ! "$enable_failover" =~ ^[Nn]$ ]] && echo "true" || echo "false")
     
-    read -p "Enable auto protocol switching? [Y/n]: " enable_switching
-    AUTO_SWITCH=$([[ ! "$enable_switching" =~ ^[Nn]$ ]] && echo "true" || echo "false")
-    
-    # Performance tuning options
-    echo
-    log blue "🚀 Performance Options:"
-    read -p "Enable multi-threading? [Y/n]: " enable_multi_thread
-    MULTI_THREAD=$([[ ! "$enable_multi_thread" =~ ^[Nn]$ ]] && echo "true" || echo "false")
-    
-    read -p "Enable compression? [Y/n]: " enable_compression
-    COMPRESSION=$([[ ! "$enable_compression" =~ ^[Nn]$ ]] && echo "true" || echo "false")
-    
-    read -p "Enable encryption? [Y/n]: " enable_encryption
-    ENCRYPTION=$([[ ! "$enable_encryption" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+    if [[ "$network_type" == "iran_detected" ]]; then
+        log yellow "🇮🇷 Iran-optimized defaults will be applied"
+        
+        read -p "Enable automatic failover? [Y/n]: " enable_failover
+        FAILOVER_ENABLED=$([[ ! "$enable_failover" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+        
+        read -p "Enable auto protocol switching? [Y/n]: " enable_switching
+        AUTO_SWITCH=$([[ ! "$enable_switching" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+        
+        read -p "Enable geographic load balancing? [Y/n]: " enable_geo_balancing
+        GEO_BALANCING_ENABLED=$([[ ! "$enable_geo_balancing" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+        
+        read -p "Enable adaptive tunneling (port/protocol hopping)? [Y/n]: " enable_adaptive
+        ADAPTIVE_TUNNELING=$([[ ! "$enable_adaptive" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+        
+        # Force optimal settings for Iran
+        MULTI_THREAD="true"
+        COMPRESSION="true"
+        ENCRYPTION="true"
+        TLS_OBFUSCATION="true"
+        
+        log green "✅ Iran optimizations automatically enabled"
+    else
+        read -p "Enable automatic failover? [Y/n]: " enable_failover
+        FAILOVER_ENABLED=$([[ ! "$enable_failover" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+        
+        read -p "Enable auto protocol switching? [Y/n]: " enable_switching
+        AUTO_SWITCH=$([[ ! "$enable_switching" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+        
+        read -p "Enable geographic load balancing? [Y/n]: " enable_geo_balancing
+        GEO_BALANCING_ENABLED=$([[ ! "$enable_geo_balancing" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+        
+        # Performance tuning options
+        echo
+        log blue "🚀 Performance Options:"
+        read -p "Enable multi-threading? [Y/n]: " enable_multi_thread
+        MULTI_THREAD=$([[ ! "$enable_multi_thread" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+        
+        read -p "Enable compression? [Y/n]: " enable_compression
+        COMPRESSION=$([[ ! "$enable_compression" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+        
+        read -p "Enable encryption? [Y/n]: " enable_encryption
+        ENCRYPTION=$([[ ! "$enable_encryption" =~ ^[Nn]$ ]] && echo "true" || echo "false")
+    fi
     
     # Save configuration
     save_configuration
@@ -732,7 +2538,7 @@ save_configuration() {
     
     # Save new configuration
     cat > "$MAIN_CONFIG" << EOF
-# MVTunnel Configuration v2.0 - Generated $(date)
+# MoonTun Configuration v2.0 - Generated $(date)
 TUNNEL_MODE="$TUNNEL_MODE"
 LOCAL_IP="$LOCAL_IP"
 REMOTE_IP="$REMOTE_IP"
@@ -746,6 +2552,10 @@ AUTO_SWITCH="$AUTO_SWITCH"
 PUBLIC_IP="$(get_public_ip)"
 LAST_UPDATE="$(date)"
 
+# Network Detection
+NETWORK_TYPE="$network_type"
+IRAN_NETWORK_DETECTED="$([[ "$network_type" == "iran_detected" ]] && echo "true" || echo "false")"
+
 # Node Types
 EASYTIER_NODE_TYPE="${EASYTIER_NODE_TYPE:-connected}"
 RATHOLE_NODE_TYPE="${RATHOLE_NODE_TYPE:-bidirectional}"
@@ -755,8 +2565,24 @@ MULTI_THREAD="${MULTI_THREAD:-true}"
 COMPRESSION="${COMPRESSION:-true}"
 ENCRYPTION="${ENCRYPTION:-true}"
 
+# Advanced Features
+GEO_BALANCING_ENABLED="${GEO_BALANCING_ENABLED:-false}"
+ADAPTIVE_TUNNELING="${ADAPTIVE_TUNNELING:-false}"
+TLS_OBFUSCATION="${TLS_OBFUSCATION:-false}"
+
 # Protocol Configuration
 ENABLED_PROTOCOLS="${ENABLED_PROTOCOLS:-udp,tcp,ws,quic}"
+
+# Iran-specific Settings
+$(if [[ "$network_type" == "iran_detected" ]]; then
+echo "BACKUP_DNS=\"178.22.122.100,185.51.200.2,10.202.10.10,10.202.10.11\""
+echo "ADDITIONAL_PORTS=\"443,80,53,8080,8443,1194,1723\""
+echo "TCP_WINDOW_SCALING=\"true\""
+echo "TCP_CONGESTION_CONTROL=\"bbr\""
+echo "KEEP_ALIVE_ENABLED=\"true\""
+echo "KEEP_ALIVE_INTERVAL=\"30\""
+echo "PACKET_FRAGMENTATION=\"true\""
+fi)
 EOF
 
     # Validate configuration
@@ -1647,26 +3473,43 @@ compile_core_from_source() {
 # =============================================================================
 
 connect_tunnel() {
-    log purple "🚀 Connecting MVTunnel..."
+    log purple "🚀 Connecting MoonTun Intelligent Tunnel..."
     
     # Load configuration
     if [[ ! -f "$MAIN_CONFIG" ]]; then
-        log red "No configuration found. Run: mv setup"
+        log red "No configuration found. Run: moontun setup"
         return 1
     fi
     
     source "$MAIN_CONFIG"
     
-    # Start tunnel based on mode
+    # Apply Iran-specific network optimizations if detected
+    if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+        log cyan "🇮🇷 Applying Iran network optimizations..."
+        setup_iran_dns_optimization
+        optimize_tcp_settings
+    fi
+    
+    # Setup geographic load balancing if enabled
+    if [[ "${GEO_BALANCING_ENABLED:-false}" == "true" ]] && [[ -n "$REMOTE_SERVER" ]]; then
+        log cyan "🌍 Setting up geographic load balancing..."
+        if setup_geo_load_balancing; then
+            # Reload config after geo optimization
+            source "$MAIN_CONFIG"
+            schedule_geo_rebalancing
+        fi
+    fi
+    
+    # Start tunnel based on mode using optimized functions
     case "$TUNNEL_MODE" in
         "easytier")
-            start_easytier
+            start_easytier_optimized
             ;;
         "rathole")
-            start_rathole
+            start_rathole_optimized
             ;;
         "hybrid")
-            start_hybrid_mode
+            start_hybrid_mode_optimized
             ;;
         *)
             log red "Unknown tunnel mode: $TUNNEL_MODE"
@@ -1674,12 +3517,24 @@ connect_tunnel() {
             ;;
     esac
     
-    # Start monitoring if enabled
+    # Start enhanced monitoring if enabled
     if [[ "$FAILOVER_ENABLED" == "true" ]]; then
-        start_monitoring
+        enhanced_health_monitoring
     fi
     
-    log green "🎉 MVTunnel connected successfully!"
+    # Start adaptive tunneling for Iran conditions
+    if [[ "${ADAPTIVE_TUNNELING:-false}" == "true" ]] && [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+        log cyan "🔄 Starting adaptive anti-censorship tunneling..."
+        start_adaptive_tunneling
+    fi
+    
+    # Setup multi-path routing if multiple servers
+    if [[ -n "$REMOTE_SERVER" ]] && [[ "$REMOTE_SERVER" == *","* ]]; then
+        log cyan "🌐 Setting up multi-path routing..."
+        setup_multipath_routing
+    fi
+    
+    log green "🎉 MoonTun connected successfully with all optimizations!"
     show_connection_status
 }
 
@@ -2172,11 +4027,31 @@ show_connection_status() {
     echo
     log cyan "📋 Connection Details:"
     echo "  🌐 Local tunnel IP: $LOCAL_IP"
-    echo "  🎯 Remote tunnel IP: $REMOTE_IP"  
+    echo "  🎯 Remote tunnel IP: $REMOTE_IP"
     echo "  🔌 Protocol: $PROTOCOL"
     echo "  🚪 Port: $PORT"
     echo "  🔐 Secret: $NETWORK_SECRET"
     echo "  📡 Public IP: $(get_public_ip)"
+    
+    # Show Iran detection status
+    if [[ "${IRAN_NETWORK_DETECTED:-false}" == "true" ]]; then
+        echo "  🇮🇷 Iran Network: Detected (${IRAN_CONFIDENCE_SCORE:-0}% confidence)"
+        echo "  🛡️  Optimizations: Anti-DPI, DNS bypass, Protocol hopping"
+    else
+        echo "  🌍 Network Type: Standard"
+    fi
+    
+    # Show active features
+    echo "  🔧 Active Features:"
+    if [[ "${GEO_BALANCING_ENABLED:-false}" == "true" ]]; then
+        echo "    ✅ Geographic Load Balancing"
+    fi
+    if [[ "${OPTIMIZED_MODE:-false}" == "true" ]]; then
+        echo "    ✅ Optimized Tunnel Mode"
+    fi
+    if [[ "${HYBRID_MODE:-}" == "optimized" ]]; then
+        echo "    ✅ Hybrid Mode (EasyTier + Rathole)"
+    fi
     echo
 }
 
@@ -2235,36 +4110,55 @@ live_monitor() {
 }
 
 stop_tunnel() {
-    log cyan "Stopping MVTunnel..."
+    log cyan "Stopping MoonTun..."
     
-    # Stop processes gracefully
+    # Stop all tunnel processes gracefully
     pkill -TERM -f "easytier-core" 2>/dev/null || true
     pkill -TERM -f "rathole" 2>/dev/null || true
     
+    # Stop all monitoring and management processes
+    pkill -TERM -f "moontun.*monitor" 2>/dev/null || true
+    pkill -TERM -f "adaptive_hop" 2>/dev/null || true
+    pkill -TERM -f "geo_scheduler" 2>/dev/null || true
+    pkill -TERM -f "path_quality_monitor" 2>/dev/null || true
+    
     # Wait for graceful shutdown
-    sleep 3
+    sleep 5
     
     # Force kill if still running
     pkill -KILL -f "easytier-core" 2>/dev/null || true
     pkill -KILL -f "rathole" 2>/dev/null || true
+    pkill -KILL -f "moontun.*monitor" 2>/dev/null || true
+    pkill -KILL -f "adaptive_hop" 2>/dev/null || true
+    pkill -KILL -f "geo_scheduler" 2>/dev/null || true
     
-    # Stop monitor
-    if [[ -f "$CONFIG_DIR/monitor.pid" ]]; then
-        kill "$(cat $CONFIG_DIR/monitor.pid)" 2>/dev/null || true
-        rm -f "$CONFIG_DIR/monitor.pid"
-    fi
+    # Stop all monitoring services
+    for pid_file in "$CONFIG_DIR"/*.pid; do
+        if [[ -f "$pid_file" ]]; then
+            local pid=$(cat "$pid_file" 2>/dev/null)
+            if [[ -n "$pid" ]]; then
+                kill "$pid" 2>/dev/null || true
+            fi
+            rm -f "$pid_file"
+        fi
+    done
     
-    # Network cleanup
-    network_cleanup
+    # Comprehensive network cleanup
+    comprehensive_network_cleanup
+    
+    # Restore original DNS if modified
+    restore_original_dns
     
     # Clear status and PID files
-    rm -f "$STATUS_FILE" "$CONFIG_DIR/mvtunnel.pid"
+    rm -f "$STATUS_FILE" "$CONFIG_DIR/moontun.pid"
+    rm -f "$CONFIG_DIR"/tunnel_*.pid
+    rm -f "$CONFIG_DIR"/CRITICAL_FAILURE_*
     
-    log green "MVTunnel stopped and cleaned up"
+    log green "MoonTun stopped and completely cleaned up"
 }
 
 network_cleanup() {
-    log cyan "Performing network cleanup..."
+    log cyan "Performing basic network cleanup..."
     
     # Load configuration for cleanup
     if [[ -f "$MAIN_CONFIG" ]]; then
@@ -2274,9 +4168,9 @@ network_cleanup() {
     # Clean up virtual interfaces created by tunnels
     local interfaces_to_clean=(
         "easytier0"
-        "mvtunnel0" 
+        "moontun0" 
         "rathole0"
-        "tun-mvtunnel"
+        "tun-moontun"
     )
     
     for iface in "${interfaces_to_clean[@]}"; do
@@ -2311,7 +4205,141 @@ network_cleanup() {
             ;;
     esac
     
-    log green "Network cleanup completed"
+    log green "Basic network cleanup completed"
+}
+
+comprehensive_network_cleanup() {
+    log cyan "Performing comprehensive network cleanup..."
+    
+    # Basic cleanup first
+    network_cleanup
+    
+    # Advanced cleanup for new features
+    cleanup_multipath_routing
+    cleanup_geo_balancing
+    cleanup_adaptive_tunneling
+    cleanup_enhanced_monitoring
+    
+    # Emergency cleanup
+    cleanup_emergency_network
+    
+    # Clean up all MoonTun-related network configuration
+    cleanup_all_moontun_network
+    
+    log green "Comprehensive network cleanup completed"
+}
+
+cleanup_multipath_routing() {
+    log cyan "🧹 Cleaning up multi-path routing..."
+    
+    # Clean up all custom routing tables (100-120)
+    for table_id in {100..120}; do
+        ip route flush table "$table_id" 2>/dev/null || true
+        ip rule del table "$table_id" 2>/dev/null || true
+    done
+    
+    # Clean up policy routing rules by fwmark
+    for mark in {1..20}; do
+        ip rule del fwmark "$mark" 2>/dev/null || true
+    done
+    
+    # Clean up ECMP routes
+    ip route del default 2>/dev/null || true
+    
+    log green "✅ Multi-path routing cleaned up"
+}
+
+cleanup_geo_balancing() {
+    log cyan "🧹 Cleaning up geographic load balancing..."
+    
+    # Remove geo balancing status
+    sed -i '/GEO_BALANCING_ENABLED/d' "$STATUS_FILE" 2>/dev/null || true
+    sed -i '/LAST_GEO_UPDATE/d' "$STATUS_FILE" 2>/dev/null || true
+    sed -i '/TOP_SERVERS/d' "$STATUS_FILE" 2>/dev/null || true
+    
+    # Stop geo scheduler
+    pkill -f "geo_scheduler" 2>/dev/null || true
+    rm -f "$CONFIG_DIR/geo_scheduler.pid"
+    
+    log green "✅ Geographic load balancing cleaned up"
+}
+
+cleanup_adaptive_tunneling() {
+    log cyan "🧹 Cleaning up adaptive tunneling..."
+    
+    # Stop adaptive processes
+    pkill -f "adaptive_hop" 2>/dev/null || true
+    pkill -f "moontun_path_monitor" 2>/dev/null || true
+    
+    # Remove PID files
+    rm -f "$CONFIG_DIR/hopping.pid"
+    rm -f "$CONFIG_DIR/path_monitor.pid"
+    
+    # Clean up emergency tunnel if exists
+    if [[ -f "$CONFIG_DIR/emergency_tunnel.pid" ]]; then
+        local emergency_pid=$(cat "$CONFIG_DIR/emergency_tunnel.pid" 2>/dev/null)
+        if [[ -n "$emergency_pid" ]]; then
+            kill "$emergency_pid" 2>/dev/null || true
+        fi
+        rm -f "$CONFIG_DIR/emergency_tunnel.pid"
+    fi
+    
+    log green "✅ Adaptive tunneling cleaned up"
+}
+
+cleanup_enhanced_monitoring() {
+    log cyan "🧹 Cleaning up enhanced monitoring..."
+    
+    # Stop enhanced monitor
+    pkill -f "moontun_enhanced_monitor" 2>/dev/null || true
+    rm -f "$CONFIG_DIR/enhanced_monitor.pid"
+    
+    # Clean up health metrics
+    if [[ -f "$LOG_DIR/health_metrics.log" ]]; then
+        # Keep only last 1000 lines to prevent log bloat
+        tail -1000 "$LOG_DIR/health_metrics.log" > "$LOG_DIR/health_metrics.log.tmp" 2>/dev/null || true
+        mv "$LOG_DIR/health_metrics.log.tmp" "$LOG_DIR/health_metrics.log" 2>/dev/null || true
+    fi
+    
+    log green "✅ Enhanced monitoring cleaned up"
+}
+
+cleanup_all_moontun_network() {
+    log cyan "🧹 Cleaning up all MoonTun network configurations..."
+    
+    # Remove all MoonTun-related iptables rules
+    iptables-save 2>/dev/null | grep -v "MOONTUN" | iptables-restore 2>/dev/null || true
+    
+    # Clean up all tunnel interfaces
+    local all_interfaces=$(ip link show | grep -o "tun[0-9]*\|easytier[0-9]*\|rathole[0-9]*\|moontun[0-9]*" 2>/dev/null || true)
+    for iface in $all_interfaces; do
+        if [[ -n "$iface" ]]; then
+            ip link delete "$iface" 2>/dev/null || true
+            log blue "Removed interface: $iface"
+        fi
+    done
+    
+    # Reset TCP settings to defaults if they were modified
+    reset_tcp_settings
+    
+    log green "✅ All MoonTun network configurations cleaned up"
+}
+
+reset_tcp_settings() {
+    log cyan "🔧 Resetting TCP settings to defaults..."
+    
+    # Reset TCP congestion control to default
+    echo 'cubic' > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null || true
+    
+    # Reset TCP window scaling
+    echo 1 > /proc/sys/net/ipv4/tcp_window_scaling 2>/dev/null || true
+    
+    # Reset TCP keepalive settings to defaults
+    echo 7200 > /proc/sys/net/ipv4/tcp_keepalive_time 2>/dev/null || true
+    echo 75 > /proc/sys/net/ipv4/tcp_keepalive_intvl 2>/dev/null || true
+    echo 9 > /proc/sys/net/ipv4/tcp_keepalive_probes 2>/dev/null || true
+    
+    log green "✅ TCP settings reset to defaults"
 }
 
 cleanup_iptables_rules() {

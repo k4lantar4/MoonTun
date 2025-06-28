@@ -1840,6 +1840,52 @@ install_dependencies() {
     log green "Dependencies installed successfully"
 }
 
+install_dependencies_local() {
+    log cyan "📦 Installing dependencies from local packages..."
+    
+    # Check if offline package directory exists
+    local offline_dir="./moontun-offline"
+    local packages_dir="$offline_dir/packages"
+    
+    if [[ ! -d "$packages_dir" ]]; then
+        offline_dir="../moontun-offline"
+        packages_dir="$offline_dir/packages"
+    fi
+    
+    if [[ ! -d "$packages_dir" ]]; then
+        log red "Local packages directory not found!"
+        log yellow "Expected: ./moontun-offline/packages or ../moontun-offline/packages"
+        log blue "Please ensure the offline package is extracted correctly"
+        exit 1
+    fi
+    
+    log blue "Found local packages directory: $packages_dir"
+    
+    # Count available packages
+    local package_count=$(ls -1 "$packages_dir"/*.deb 2>/dev/null | wc -l)
+    if [[ $package_count -eq 0 ]]; then
+        log red "No .deb packages found in $packages_dir"
+        exit 1
+    fi
+    
+    log blue "Installing $package_count local packages..."
+    
+    # Install packages with dpkg
+    cd "$packages_dir"
+    
+    if dpkg -i *.deb 2>/dev/null; then
+        log green "✅ All local packages installed successfully"
+    else
+        log yellow "⚠️  Some packages failed, fixing dependencies..."
+        # Try to fix broken dependencies
+        apt-get install -f -y >/dev/null 2>&1 || true
+        log green "✅ Dependencies fixed"
+    fi
+    
+    # Return to original directory
+    cd - >/dev/null
+}
+
 install_easytier() {
     log cyan "Installing EasyTier core..."
     
@@ -1939,6 +1985,79 @@ install_cores_from_repo() {
     fi
 }
 
+install_cores_local() {
+    log cyan "🔧 Installing tunnel cores from local binaries..."
+    
+    # Check if offline binary directory exists
+    local offline_dir="./moontun-offline"
+    local binaries_dir="$offline_dir/bin"
+    
+    if [[ ! -d "$binaries_dir" ]]; then
+        offline_dir="../moontun-offline"
+        binaries_dir="$offline_dir/bin"
+    fi
+    
+    if [[ ! -d "$binaries_dir" ]]; then
+        log red "Local binaries directory not found!"
+        log yellow "Expected: ./moontun-offline/bin or ../moontun-offline/bin"
+        log blue "Please ensure the offline package is extracted correctly"
+        exit 1
+    fi
+    
+    log blue "Found local binaries directory: $binaries_dir"
+    
+    cd "$binaries_dir"
+    
+    # Install EasyTier binaries
+    local easytier_installed=false
+    for binary in easytier-*; do
+        if [[ -f "$binary" ]] && [[ -x "$binary" ]]; then
+            cp "$binary" "$DEST_DIR/"
+            chmod +x "$DEST_DIR/$binary"
+            log green "✅ Installed $binary"
+            easytier_installed=true
+        fi
+    done
+    
+    # Install Rathole binaries  
+    local rathole_installed=false
+    for binary in rathole*; do
+        if [[ -f "$binary" ]] && [[ -x "$binary" ]] && [[ "$binary" != *.zip ]]; then
+            cp "$binary" "$DEST_DIR/"
+            chmod +x "$DEST_DIR/$binary"
+            log green "✅ Installed $binary"
+            rathole_installed=true
+        fi
+    done
+    
+    # Update PATH if needed
+    if ! echo "$PATH" | grep -q "/usr/local/bin"; then
+        echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/environment
+        log blue "📍 Updated system PATH"
+    fi
+    
+    # Return to original directory
+    cd - >/dev/null
+    
+    # Verify installation
+    if [[ "$easytier_installed" == true ]]; then
+        log green "✅ EasyTier cores installed successfully"
+    else
+        log yellow "⚠️  No EasyTier binaries found"
+    fi
+    
+    if [[ "$rathole_installed" == true ]]; then
+        log green "✅ Rathole cores installed successfully"
+    else
+        log yellow "⚠️  No Rathole binaries found"
+    fi
+    
+    if [[ "$easytier_installed" == false ]] && [[ "$rathole_installed" == false ]]; then
+        log red "❌ No tunnel cores installed!"
+        exit 1
+    fi
+}
+
 install_rathole() {
     log cyan "Installing Rathole core..."
     
@@ -2020,14 +2139,30 @@ EOF
 }
 
 install_moontun() {
-    local auto_mode="$1"
+    local mode="$1"
+    local local_mode=false
+    
+    # Check if --local flag is provided
+    if [[ "$mode" == "--local" ]] || [[ "$mode" == "local" ]]; then
+        local_mode=true
+        mode="local"
+    fi
     
     clear
     echo -e "${CYAN}🚀 MoonTun Intelligent Tunnel System v${MOONTUN_VERSION}${NC}"
     echo "================================================================="
     echo
     
-    if [[ "$auto_mode" != "auto" ]]; then
+    if [[ "$local_mode" == true ]]; then
+        log cyan "🇮🇷 Installing MoonTun in OFFLINE mode for Iran servers"
+        echo "Components:"
+        echo "  • Local package installation (No internet required)"
+        echo "  • Local tunnel cores installation"
+        echo "  • Intelligent Failover System"
+        echo "  • Network Monitoring & Auto-switching"
+        echo "  • Iran-optimized configurations"
+        echo
+    elif [[ "$mode" != "auto" ]]; then
         log yellow "This will install MoonTun with multi-node tunnel system"
         echo "Components:"
         echo "  • EasyTier Core (Latest version)"
@@ -2047,26 +2182,36 @@ install_moontun() {
     # Installation steps
     check_root
     setup_directories
-    install_dependencies
     
-    # Clone MoonTun repository for access to binary files and resources
-    log cyan "📥 Downloading MoonTun repository..."
-    local temp_dir=$(mktemp -d)
-    cd "$temp_dir"
+    # Install dependencies based on mode
+    if [[ "$local_mode" == true ]]; then
+        install_dependencies_local
+    else
+        install_dependencies
+    fi
     
-    if git clone https://github.com/k4lantar4/moontun.git; then
-        cd moontun
-        log green "✅ Repository downloaded successfully"
+    # Install tunnel cores based on mode
+    if [[ "$local_mode" == true ]]; then
+        install_cores_local
+    else
+        # Clone MoonTun repository for access to binary files and resources
+        log cyan "📥 Downloading MoonTun repository..."
+        local temp_dir=$(mktemp -d)
+        cd "$temp_dir"
         
-        # Install tunnel cores from repository
-        install_cores_from_repo
-        
-        # Install MoonTun manager with multiple locations for maximum compatibility
-        log cyan "Installing MoonTun manager..."
-        
-        # Primary installation location
-        cp moontun.sh "$DEST_DIR/moontun"
-        chmod +x "$DEST_DIR/moontun"
+        if git clone https://github.com/k4lantar4/moontun.git; then
+            cd moontun
+            log green "✅ Repository downloaded successfully"
+            
+            # Install tunnel cores from repository
+            install_cores_from_repo
+            
+            # Install MoonTun manager with multiple locations for maximum compatibility
+            log cyan "Installing MoonTun manager..."
+            
+            # Primary installation location
+            cp moontun.sh "$DEST_DIR/moontun"
+            chmod +x "$DEST_DIR/moontun"
         
         # Backup installation location (in case /usr/local/bin is not in PATH)
         cp moontun.sh "/usr/bin/moontun"
@@ -5041,7 +5186,8 @@ show_help() {
     echo "  sudo moontun <command> [options]"
     echo
     echo -e "${GREEN}INSTALLATION:${NC}"
-    echo -e "${CYAN}  curl -fsSL https://github.com/k4lantar4/moontun/raw/main/moontun.sh | sudo bash -s -- --install${NC}"
+    echo -e "${CYAN}  Online:  curl -fsSL https://github.com/k4lantar4/moontun/raw/main/moontun.sh | sudo bash -s -- --install${NC}"
+    echo -e "${CYAN}  Offline: sudo moontun --local${NC}  (for Iran servers without internet)"
     echo
     echo -e "${GREEN}COMMANDS:${NC}"
     echo -e "${CYAN}  setup${NC}          Interactive tunnel configuration"
@@ -5486,6 +5632,9 @@ main() {
         "--auto"|"auto")
             install_moontun "auto"
             ;;
+        "--local"|"local"|"install-local")
+            install_moontun "--local"
+            ;;
         "setup")
             check_root
             setup_tunnel
@@ -5493,6 +5642,10 @@ main() {
         "install-cores")
             check_root
             manage_tunnel_cores
+            ;;
+        "install-cores-local")
+            check_root
+            install_cores_local
             ;;
         "connect"|"start")
             check_root

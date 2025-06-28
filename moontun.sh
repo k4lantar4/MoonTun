@@ -2424,42 +2424,40 @@ install_moontun() {
             # Primary installation location
             cp moontun.sh "$DEST_DIR/moontun"
             chmod +x "$DEST_DIR/moontun"
-        
-        # Backup installation location (in case /usr/local/bin is not in PATH)
-        cp moontun.sh "/usr/bin/moontun"
-        chmod +x "/usr/bin/moontun"
-        
-        # Create symbolic link for additional compatibility
-        ln -sf "/usr/bin/moontun" "/usr/local/bin/mv" 2>/dev/null || true
-        ln -sf "/usr/bin/moontun" "/usr/bin/mv" 2>/dev/null || true
-        
-        # Copy binary files to system directories for offline access
-        if [[ -d "bin" ]]; then
-            log cyan "📦 Installing binary files from repository..."
-            mkdir -p "/opt/moontun/bin"
-            cp -r bin/* "/opt/moontun/bin/" 2>/dev/null || true
-            chmod +x "/opt/moontun/bin/"* 2>/dev/null || true
-            log green "✅ Binary files installed to /opt/moontun/bin/"
+            
+            # Backup installation location (in case /usr/local/bin is not in PATH)
+            cp moontun.sh "/usr/bin/moontun"
+            chmod +x "/usr/bin/moontun"
+            
+            # Create symbolic link for additional compatibility
+            ln -sf "/usr/bin/moontun" "/usr/local/bin/mv" 2>/dev/null || true
+            ln -sf "/usr/bin/moontun" "/usr/bin/mv" 2>/dev/null || true
+            
+            # Copy binary files to system directories for offline access
+            if [[ -d "bin" ]]; then
+                log cyan "📦 Installing binary files from repository..."
+                mkdir -p "/opt/moontun/bin"
+                cp -r bin/* "/opt/moontun/bin/" 2>/dev/null || true
+                chmod +x "/opt/moontun/bin/"* 2>/dev/null || true
+                log green "✅ Binary files installed to /opt/moontun/bin/"
+            fi
+            
+            cd /
+            rm -rf "$temp_dir"
+        else
+            log red "Failed to clone MoonTun repository"
+            log cyan "Falling back to online installation..."
+            install_easytier_online
+            install_rathole_online
+            
+            # Install MoonTun manager for fallback
+            cp "$0" "$DEST_DIR/moontun"
+            chmod +x "$DEST_DIR/moontun"
+            cp "$0" "/usr/bin/moontun"
+            chmod +x "/usr/bin/moontun"
+            ln -sf "/usr/bin/moontun" "/usr/local/bin/mv" 2>/dev/null || true
+            ln -sf "/usr/bin/moontun" "/usr/bin/mv" 2>/dev/null || true
         fi
-        
-        cd /
-        rm -rf "$temp_dir"
-    else
-        log red "❌ Failed to download repository, falling back to online installation"
-        cd /
-        rm -rf "$temp_dir"
-        
-        # Fallback to original installation method
-        install_easytier
-        install_rathole
-        
-        # Install MoonTun manager
-        cp "$0" "$DEST_DIR/moontun"
-        chmod +x "$DEST_DIR/moontun"
-        cp "$0" "/usr/bin/moontun"
-        chmod +x "/usr/bin/moontun"
-        ln -sf "/usr/bin/moontun" "/usr/local/bin/mv" 2>/dev/null || true
-        ln -sf "/usr/bin/moontun" "/usr/bin/mv" 2>/dev/null || true
     fi
     
     # Verify installation

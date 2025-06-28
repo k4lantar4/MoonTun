@@ -146,6 +146,67 @@ install_easytier() {
     cd / && rm -rf "$temp_dir"
 }
 
+install_cores_from_repo() {
+    log cyan "📦 Installing tunnel cores from repository..."
+    
+    # Detect architecture
+    local arch=$(uname -m)
+    local arch_dir=""
+    
+    case $arch in
+        x86_64) arch_dir="x86_64" ;;
+        aarch64) arch_dir="aarch64" ;;
+        armv7l) arch_dir="armv7" ;;
+        *) 
+            log yellow "⚠️  Architecture $arch may not be supported"
+            log cyan "Falling back to online installation..."
+            install_easytier
+            install_rathole
+            return
+            ;;
+    esac
+    
+    # Check if bin directory exists and has files for our architecture
+    if [[ -d "bin/$arch_dir" ]]; then
+        log cyan "🔍 Found binaries for $arch architecture"
+        
+        # Install EasyTier
+        if [[ -f "bin/$arch_dir/easytier-core" ]]; then
+            cp "bin/$arch_dir/easytier-core" "$DEST_DIR/"
+            chmod +x "$DEST_DIR/easytier-core"
+            log green "✅ EasyTier core installed from repository"
+            
+            # Install CLI if available
+            if [[ -f "bin/$arch_dir/easytier-cli" ]]; then
+                cp "bin/$arch_dir/easytier-cli" "$DEST_DIR/"
+                chmod +x "$DEST_DIR/easytier-cli"
+                log green "✅ EasyTier CLI installed from repository"
+            fi
+        fi
+        
+        # Install Rathole
+        if [[ -f "bin/$arch_dir/rathole" ]]; then
+            cp "bin/$arch_dir/rathole" "$DEST_DIR/"
+            chmod +x "$DEST_DIR/rathole"
+            log green "✅ Rathole core installed from repository"
+        fi
+        
+        # Check if we got the essential files
+        if [[ -f "$DEST_DIR/easytier-core" ]] || [[ -f "$DEST_DIR/rathole" ]]; then
+            log green "🎉 Repository installation completed successfully!"
+        else
+            log yellow "⚠️  No compatible binaries found, falling back to online installation"
+            install_easytier
+            install_rathole
+        fi
+    else
+        log yellow "⚠️  No binaries found for $arch architecture in repository"
+        log cyan "Falling back to online installation..."
+        install_easytier
+        install_rathole
+    fi
+}
+
 install_rathole() {
     log cyan "Installing Rathole core..."
     
@@ -255,23 +316,62 @@ install_moontun() {
     check_root
     setup_directories
     install_dependencies
-    install_easytier
-    install_rathole
     
-    # Install MoonTun manager with multiple locations for maximum compatibility
-    log cyan "Installing MoonTun manager..."
+    # Clone MoonTun repository for access to binary files and resources
+    log cyan "📥 Downloading MoonTun repository..."
+    local temp_dir=$(mktemp -d)
+    cd "$temp_dir"
     
-    # Primary installation location
-    cp "$0" "$DEST_DIR/moontun"
-    chmod +x "$DEST_DIR/moontun"
-    
-    # Backup installation location (in case /usr/local/bin is not in PATH)
-    cp "$0" "/usr/bin/moontun"
-    chmod +x "/usr/bin/moontun"
-    
-    # Create symbolic link for additional compatibility
-    ln -sf "/usr/bin/moontun" "/usr/local/bin/mv" 2>/dev/null || true
-    ln -sf "/usr/bin/moontun" "/usr/bin/mv" 2>/dev/null || true
+    if git clone https://github.com/k4lantar4/moontun.git; then
+        cd moontun
+        log green "✅ Repository downloaded successfully"
+        
+        # Install tunnel cores from repository
+        install_cores_from_repo
+        
+        # Install MoonTun manager with multiple locations for maximum compatibility
+        log cyan "Installing MoonTun manager..."
+        
+        # Primary installation location
+        cp moontun.sh "$DEST_DIR/moontun"
+        chmod +x "$DEST_DIR/moontun"
+        
+        # Backup installation location (in case /usr/local/bin is not in PATH)
+        cp moontun.sh "/usr/bin/moontun"
+        chmod +x "/usr/bin/moontun"
+        
+        # Create symbolic link for additional compatibility
+        ln -sf "/usr/bin/moontun" "/usr/local/bin/mv" 2>/dev/null || true
+        ln -sf "/usr/bin/moontun" "/usr/bin/mv" 2>/dev/null || true
+        
+        # Copy binary files to system directories for offline access
+        if [[ -d "bin" ]]; then
+            log cyan "📦 Installing binary files from repository..."
+            mkdir -p "/opt/moontun/bin"
+            cp -r bin/* "/opt/moontun/bin/" 2>/dev/null || true
+            chmod +x "/opt/moontun/bin/"* 2>/dev/null || true
+            log green "✅ Binary files installed to /opt/moontun/bin/"
+        fi
+        
+        cd /
+        rm -rf "$temp_dir"
+    else
+        log red "❌ Failed to download repository, falling back to online installation"
+        cd /
+        rm -rf "$temp_dir"
+        
+        # Fallback to original installation method
+        install_easytier
+        install_rathole
+        
+        # Install MoonTun manager
+        cp "$0" "$DEST_DIR/moontun"
+        chmod +x "$DEST_DIR/moontun"
+        cp "$0" "/usr/bin/moontun"
+        chmod +x "/usr/bin/moontun"
+        ln -sf "/usr/bin/moontun" "/usr/local/bin/mv" 2>/dev/null || true
+        ln -sf "/usr/bin/moontun" "/usr/bin/mv" 2>/dev/null || true
+    fi
     
     # Verify installation
     if command -v moontun >/dev/null 2>&1; then
@@ -1073,6 +1173,43 @@ install_rathole_online() {
 install_from_mvtunnel_repo() {
     log cyan "🔄 Installing from MoonTun repository..."
     
+    # First check if we have local binaries from installation
+    if [[ -d "/opt/moontun/bin" ]]; then
+        log cyan "📦 Using cached repository binaries..."
+        
+        local arch=$(uname -m)
+        local arch_dir=""
+        
+        case $arch in
+            x86_64) arch_dir="x86_64" ;;
+            aarch64) arch_dir="aarch64" ;;
+            armv7l) arch_dir="armv7" ;;
+            *) log red "Unsupported architecture: $arch"; press_key; return 1 ;;
+        esac
+        
+        if [[ -d "/opt/moontun/bin/$arch_dir" ]]; then
+            # Install EasyTier
+            if [[ -f "/opt/moontun/bin/$arch_dir/easytier-core" ]]; then
+                cp "/opt/moontun/bin/$arch_dir/easytier-core" "$DEST_DIR/"
+                cp "/opt/moontun/bin/$arch_dir/easytier-cli" "$DEST_DIR/" 2>/dev/null || true
+                chmod +x "$DEST_DIR/easytier-core" "$DEST_DIR/easytier-cli" 2>/dev/null || true
+                log green "✅ EasyTier installed from cached repository"
+            fi
+            
+            # Install Rathole
+            if [[ -f "/opt/moontun/bin/$arch_dir/rathole" ]]; then
+                cp "/opt/moontun/bin/$arch_dir/rathole" "$DEST_DIR/"
+                chmod +x "$DEST_DIR/rathole"
+                log green "✅ Rathole installed from cached repository"
+            fi
+            
+            log green "🎉 Installation from cached repository completed!"
+            press_key
+            return
+        fi
+    fi
+    
+    # If no cached binaries, download fresh from repository
     local temp_dir=$(mktemp -d)
     cd "$temp_dir"
     
@@ -1080,8 +1217,8 @@ install_from_mvtunnel_repo() {
     if git clone https://github.com/k4lantar4/moontun.git; then
         cd moontun
         
-        # Check for prebuilt binaries
-        if [[ -d "binaries" ]]; then
+        # Check for prebuilt binaries in bin directory
+        if [[ -d "bin" ]]; then
             log cyan "📦 Installing prebuilt binaries..."
             
             local arch=$(uname -m)
@@ -1091,24 +1228,29 @@ install_from_mvtunnel_repo() {
                 x86_64) arch_dir="x86_64" ;;
                 aarch64) arch_dir="aarch64" ;;
                 armv7l) arch_dir="armv7" ;;
-                *) log red "Unsupported architecture: $arch"; cd /; rm -rf "$temp_dir"; return 1 ;;
+                *) log red "Unsupported architecture: $arch"; cd /; rm -rf "$temp_dir"; press_key; return 1 ;;
             esac
             
-            if [[ -d "binaries/$arch_dir" ]]; then
+            if [[ -d "bin/$arch_dir" ]]; then
                 # Install EasyTier
-                if [[ -f "binaries/$arch_dir/easytier-core" ]]; then
-                    cp "binaries/$arch_dir/easytier-core" "$DEST_DIR/"
-                    cp "binaries/$arch_dir/easytier-cli" "$DEST_DIR/" 2>/dev/null || true
+                if [[ -f "bin/$arch_dir/easytier-core" ]]; then
+                    cp "bin/$arch_dir/easytier-core" "$DEST_DIR/"
+                    cp "bin/$arch_dir/easytier-cli" "$DEST_DIR/" 2>/dev/null || true
                     chmod +x "$DEST_DIR/easytier-core" "$DEST_DIR/easytier-cli" 2>/dev/null || true
                     log green "✅ EasyTier installed from repository"
                 fi
                 
                 # Install Rathole
-                if [[ -f "binaries/$arch_dir/rathole" ]]; then
-                    cp "binaries/$arch_dir/rathole" "$DEST_DIR/"
+                if [[ -f "bin/$arch_dir/rathole" ]]; then
+                    cp "bin/$arch_dir/rathole" "$DEST_DIR/"
                     chmod +x "$DEST_DIR/rathole"
                     log green "✅ Rathole installed from repository"
                 fi
+                
+                # Cache binaries for future use
+                mkdir -p "/opt/moontun/bin"
+                cp -r bin/* "/opt/moontun/bin/" 2>/dev/null || true
+                chmod +x "/opt/moontun/bin/"*/* 2>/dev/null || true
                 
                 log green "🎉 Installation from MoonTun repository completed!"
             else
@@ -1118,7 +1260,7 @@ install_from_mvtunnel_repo() {
                 install_rathole_online
             fi
         else
-            log yellow "No binaries directory found, falling back to online installation"
+            log yellow "No bin directory found, falling back to online installation"
             install_easytier_online
             install_rathole_online
         fi
@@ -1138,12 +1280,54 @@ install_from_local_files() {
     log cyan "📁 Install from local files"
     echo
     
-    read -p "📂 Enter path to local files directory: " local_path
-    
-    if [[ ! -d "$local_path" ]]; then
-        log red "Directory not found: $local_path"
-        press_key
-        return 1
+    # Check if we have cached repository files first
+    if [[ -d "/opt/moontun/bin" ]]; then
+        log blue "💡 MoonTun repository files detected. Install from:"
+        echo "1) Cached repository files (/opt/moontun/bin)"
+        echo "2) Custom local directory"
+        echo
+        read -p "Select option [1-2]: " source_choice
+        
+        if [[ "$source_choice" == "1" ]]; then
+            local arch=$(uname -m)
+            local arch_dir=""
+            
+            case $arch in
+                x86_64) arch_dir="x86_64" ;;
+                aarch64) arch_dir="aarch64" ;;
+                armv7l) arch_dir="armv7" ;;
+                *) 
+                    log red "Unsupported architecture: $arch"
+                    press_key
+                    return 1
+                    ;;
+            esac
+            
+            local local_path="/opt/moontun/bin/$arch_dir"
+            if [[ -d "$local_path" ]]; then
+                log cyan "🔍 Using cached repository files for $arch"
+            else
+                log red "No cached files for $arch architecture"
+                press_key
+                return 1
+            fi
+        else
+            read -p "📂 Enter path to local files directory: " local_path
+            
+            if [[ ! -d "$local_path" ]]; then
+                log red "Directory not found: $local_path"
+                press_key
+                return 1
+            fi
+        fi
+    else
+        read -p "📂 Enter path to local files directory: " local_path
+        
+        if [[ ! -d "$local_path" ]]; then
+            log red "Directory not found: $local_path"
+            press_key
+            return 1
+        fi
     fi
     
     log cyan "🔍 Scanning for tunnel cores in: $local_path"

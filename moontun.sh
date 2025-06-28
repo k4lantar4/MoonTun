@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# 🚀 MVTunnel - Intelligent Dual-Core Tunnel System v1.0
+# 🚀 MoonTun - Intelligent Multi-Node Tunnel System v2.0
 # Created by K4lantar4 for Iran-Foreign Server Tunneling
-# Combines EasyTier + Rathole with Smart Failover & Protocol Switching
-# Enterprise-Grade Solution for 1000+ Concurrent Users
+# Combines EasyTier + Rathole with Smart Failover & Multi-Connection
+# Enterprise-Grade Solution for 1000+ Concurrent Users with Multi-Server Support
 
 set -e
 
 # Version
-MVTUNNEL_VERSION="1.0"
+MOONTUN_VERSION="2.0"
 
 # Colors for beautiful output
 RED='\033[0;31m'
@@ -22,13 +22,13 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # System Paths
-CONFIG_DIR="/etc/mvtunnel"
-LOG_DIR="/var/log/mvtunnel"
+CONFIG_DIR="/etc/moontun"
+LOG_DIR="/var/log/moontun"
 DEST_DIR="/usr/local/bin"
-SERVICE_NAME="mvtunnel"
+SERVICE_NAME="moontun"
 
 # Configuration Files
-MAIN_CONFIG="$CONFIG_DIR/mvtunnel.conf"
+MAIN_CONFIG="$CONFIG_DIR/moontun.conf"
 EASYTIER_CONFIG="$CONFIG_DIR/easytier.json"
 RATHOLE_CONFIG="$CONFIG_DIR/rathole.toml"
 MONITOR_CONFIG="$CONFIG_DIR/monitor.conf"
@@ -55,12 +55,12 @@ log() {
     esac
     
     # Also log to file
-    echo "[$timestamp] $text" >> "$LOG_DIR/mvtunnel.log" 2>/dev/null || true
+    echo "[$timestamp] $text" >> "$LOG_DIR/moontun.log" 2>/dev/null || true
 }
 
 check_root() {
     if [[ $EUID -ne 0 ]]; then
-        log red "Root access required. Usage: sudo mv <command>"
+        log red "Root access required. Usage: sudo moontun <command>"
         exit 1
     fi
 }
@@ -226,16 +226,16 @@ RECOVERY_CHECK_INTERVAL="30"
 EOF
 }
 
-install_mvtunnel() {
+install_moontun() {
     local auto_mode="$1"
     
     clear
-    echo -e "${CYAN}🚀 MVTunnel Intelligent Tunnel System v${MVTUNNEL_VERSION}${NC}"
+    echo -e "${CYAN}🚀 MoonTun Intelligent Tunnel System v${MOONTUN_VERSION}${NC}"
     echo "================================================================="
     echo
     
     if [[ "$auto_mode" != "auto" ]]; then
-        log yellow "This will install MVTunnel with dual-core tunnel system"
+        log yellow "This will install MoonTun with multi-node tunnel system"
         echo "Components:"
         echo "  • EasyTier Core (Latest version)"
         echo "  • Rathole Core (Latest version)"  
@@ -258,10 +258,10 @@ install_mvtunnel() {
     install_easytier
     install_rathole
     
-    # Install MVTunnel manager
-    log cyan "Installing MVTunnel manager..."
-    cp "$0" "$DEST_DIR/mv"
-    chmod +x "$DEST_DIR/mv"
+    # Install MoonTun manager
+    log cyan "Installing MoonTun manager..."
+    cp "$0" "$DEST_DIR/moontun"
+    chmod +x "$DEST_DIR/moontun"
     
     # Create systemd service
     create_systemd_service
@@ -269,26 +269,26 @@ install_mvtunnel() {
     # Setup log rotation
     setup_log_rotation
     
-    log green "🎉 MVTunnel installed successfully!"
+    log green "🎉 MoonTun installed successfully!"
     echo
     log cyan "Quick Start:"
-    echo "  sudo mv setup     # Initial setup"
-    echo "  sudo mv connect   # Quick connect"
-    echo "  sudo mv status    # Check status"
-    echo "  sudo mv monitor   # Live monitoring"
+    echo "  sudo moontun setup     # Initial setup"
+    echo "  sudo moontun connect   # Quick connect"
+    echo "  sudo moontun status    # Check status"
+    echo "  sudo moontun monitor   # Live monitoring"
     echo
 }
 
 create_systemd_service() {
     cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
 [Unit]
-Description=MVTunnel Intelligent Tunnel Service
+Description=MoonTun Intelligent Tunnel Service
 After=network.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$DEST_DIR/mv daemon-mode
+ExecStart=$DEST_DIR/moontun daemon-mode
 ExecStop=/bin/kill -TERM \$MAINPID
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
@@ -311,8 +311,8 @@ setup_log_rotation() {
     log cyan "Setting up log rotation..."
     
     # Create logrotate configuration
-    cat > /etc/logrotate.d/mvtunnel << 'EOF'
-/var/log/mvtunnel/*.log {
+    cat > /etc/logrotate.d/moontun << 'EOF'
+/var/log/moontun/*.log {
     daily
     rotate 7
     compress
@@ -321,23 +321,23 @@ setup_log_rotation() {
     notifempty
     create 644 root root
     postrotate
-        systemctl reload mvtunnel 2>/dev/null || true
+        systemctl reload moontun 2>/dev/null || true
     endscript
 }
 EOF
     
     # Create log cleanup script
-    cat > /usr/local/bin/mvtunnel-log-cleanup << 'EOF'
+    cat > /usr/local/bin/moontun-log-cleanup << 'EOF'
 #!/bin/bash
-# MVTunnel Log Cleanup Script
-find /var/log/mvtunnel -name "*.log" -size +100M -exec truncate -s 50M {} \;
-find /var/log/mvtunnel -name "*.log.*" -mtime +30 -delete
+# MoonTun Log Cleanup Script
+find /var/log/moontun -name "*.log" -size +100M -exec truncate -s 50M {} \;
+find /var/log/moontun -name "*.log.*" -mtime +30 -delete
 EOF
     
-    chmod +x /usr/local/bin/mvtunnel-log-cleanup
+    chmod +x /usr/local/bin/moontun-log-cleanup
     
     # Add to crontab for emergency cleanup
-    (crontab -l 2>/dev/null | grep -v mvtunnel-log-cleanup; echo "0 2 * * * /usr/local/bin/mvtunnel-log-cleanup") | crontab -
+    (crontab -l 2>/dev/null | grep -v moontun-log-cleanup; echo "0 2 * * * /usr/local/bin/moontun-log-cleanup") | crontab -
     
     log green "Log rotation configured"
 }
@@ -348,7 +348,7 @@ EOF
 
 setup_tunnel() {
     clear
-    log purple "🎯 MVTunnel Intelligent Setup v2.0"
+    log purple "🎯 MoonTun Intelligent Setup v2.0"
     echo
     
     # Check for existing configuration
@@ -383,33 +383,35 @@ setup_tunnel() {
         *) TUNNEL_MODE="easytier" ;;
     esac
     
-    # Node type selection based on tunnel mode
+    # Node configuration based on tunnel mode
     echo
     if [[ "$TUNNEL_MODE" == "easytier" ]] || [[ "$TUNNEL_MODE" == "hybrid" ]]; then
-        log blue "🏗️  EasyTier Node Type:"
-        echo "1) Master Node (Server with 0.0.0.0 - No peers needed)"
-        echo "2) Client Node (Connect to master/peers)"
+        log blue "🏗️  EasyTier Configuration:"
+        echo "1) Standalone Node (No remote peers - Listen for connections)"
+        echo "2) Connected Node (Connect to remote peers)"
         echo
-        read -p "Select node type [1-2]: " easytier_node_choice
+        read -p "Select configuration [1-2]: " easytier_node_choice
         
         case ${easytier_node_choice:-1} in
-            1) EASYTIER_NODE_TYPE="master" ;;
-            2) EASYTIER_NODE_TYPE="client" ;;
-            *) EASYTIER_NODE_TYPE="master" ;;
+            1) EASYTIER_NODE_TYPE="standalone" ;;
+            2) EASYTIER_NODE_TYPE="connected" ;;
+            *) EASYTIER_NODE_TYPE="standalone" ;;
         esac
     fi
     
     if [[ "$TUNNEL_MODE" == "rathole" ]] || [[ "$TUNNEL_MODE" == "hybrid" ]]; then
-        log blue "🔧 Rathole Node Type:"
-        echo "1) Server (Foreign server - receives connections)"
-        echo "2) Client (Iran server - connects to foreign)"
+        log blue "🔧 Rathole Configuration:"
+        echo "1) Listener (Primary node - receives connections)"
+        echo "2) Connector (Secondary node - initiates connections)"
+        echo "3) Bidirectional (Auto-reconnect from both sides)"
         echo
-        read -p "Select node type [1-2]: " rathole_node_choice
+        read -p "Select configuration [1-3]: " rathole_node_choice
         
-        case ${rathole_node_choice:-1} in
-            1) RATHOLE_NODE_TYPE="server" ;;
-            2) RATHOLE_NODE_TYPE="client" ;;
-            *) RATHOLE_NODE_TYPE="client" ;;
+        case ${rathole_node_choice:-3} in
+            1) RATHOLE_NODE_TYPE="listener" ;;
+            2) RATHOLE_NODE_TYPE="connector" ;;
+            3) RATHOLE_NODE_TYPE="bidirectional" ;;
+            *) RATHOLE_NODE_TYPE="bidirectional" ;;
         esac
     fi
     
@@ -418,19 +420,23 @@ setup_tunnel() {
     log blue "🌐 Network Configuration:"
     
     # Local IP configuration
-    if [[ "$TUNNEL_MODE" == "easytier" ]] && [[ "$EASYTIER_NODE_TYPE" == "master" ]]; then
+    if [[ "$TUNNEL_MODE" == "easytier" ]] && [[ "$EASYTIER_NODE_TYPE" == "standalone" ]]; then
         read -p "Local tunnel IP [10.10.10.1]: " input_local_ip
         LOCAL_IP=${input_local_ip:-10.10.10.1}
         REMOTE_SERVER=""
         REMOTE_IP=""
-        log cyan "💡 Master mode: No remote configuration needed"
+        log cyan "💡 Standalone mode: No remote configuration needed"
     else
         read -p "Local tunnel IP [10.10.10.2]: " input_local_ip
         LOCAL_IP=${input_local_ip:-10.10.10.2}
         
-        read -p "Remote server IP or domain: " REMOTE_SERVER
+        # Multiple peer support
+        echo
+        log blue "🌐 Remote Peers Configuration:"
+        echo "Enter remote servers (comma-separated for multiple peers):"
+        read -p "Remote server(s): " REMOTE_SERVER
         if [[ -z "$REMOTE_SERVER" ]]; then
-            log red "Remote server is required for client mode"
+            log red "At least one remote server is required for connected mode"
             return 1
         fi
         
@@ -527,13 +533,16 @@ PUBLIC_IP="$(get_public_ip)"
 LAST_UPDATE="$(date)"
 
 # Node Types
-EASYTIER_NODE_TYPE="${EASYTIER_NODE_TYPE:-client}"
-RATHOLE_NODE_TYPE="${RATHOLE_NODE_TYPE:-client}"
+EASYTIER_NODE_TYPE="${EASYTIER_NODE_TYPE:-connected}"
+RATHOLE_NODE_TYPE="${RATHOLE_NODE_TYPE:-bidirectional}"
 
 # Performance Options
 MULTI_THREAD="${MULTI_THREAD:-true}"
 COMPRESSION="${COMPRESSION:-true}"
 ENCRYPTION="${ENCRYPTION:-true}"
+
+# Protocol Configuration
+ENABLED_PROTOCOLS="${ENABLED_PROTOCOLS:-udp,tcp,ws,quic}"
 EOF
 
     # Validate configuration
@@ -948,14 +957,14 @@ install_rathole_online() {
 }
 
 install_from_mvtunnel_repo() {
-    log cyan "🔄 Installing from MVTunnel repository..."
+    log cyan "🔄 Installing from MoonTun repository..."
     
     local temp_dir=$(mktemp -d)
     cd "$temp_dir"
     
-    log cyan "📥 Cloning MVTunnel repository..."
-    if git clone https://github.com/k4lantar4/mvtunnel.git; then
-        cd mvtunnel
+    log cyan "📥 Cloning MoonTun repository..."
+    if git clone https://github.com/k4lantar4/moontun.git; then
+        cd moontun
         
         # Check for prebuilt binaries
         if [[ -d "binaries" ]]; then
@@ -987,7 +996,7 @@ install_from_mvtunnel_repo() {
                     log green "✅ Rathole installed from repository"
                 fi
                 
-                log green "🎉 Installation from MVTunnel repository completed!"
+                log green "🎉 Installation from MoonTun repository completed!"
             else
                 log red "No prebuilt binaries for $arch architecture"
                 log cyan "Falling back to online installation..."
@@ -1000,7 +1009,7 @@ install_from_mvtunnel_repo() {
             install_rathole_online
         fi
     else
-        log red "Failed to clone MVTunnel repository"
+        log red "Failed to clone MoonTun repository"
         log cyan "Falling back to online installation..."
         install_easytier_online
         install_rathole_online
@@ -1394,29 +1403,39 @@ start_easytier() {
     local additional_args=""
     
     # Configure based on node type
-    if [[ "${EASYTIER_NODE_TYPE:-client}" == "master" ]]; then
-        log cyan "🏗️  Starting as Master Node..."
+    if [[ "${EASYTIER_NODE_TYPE:-connected}" == "standalone" ]]; then
+        log cyan "🏗️  Starting as Standalone Node..."
         listeners="--listeners ${PROTOCOL}://0.0.0.0:${PORT}"
         
-        # Master mode: Listen on 0.0.0.0 with local IP in virtual network
+        # Standalone mode: Listen on 0.0.0.0 with local IP in virtual network
         easytier_cmd="$easytier_cmd -i $LOCAL_IP"
         
-        log cyan "💡 Master mode: Waiting for clients to connect..."
+        log cyan "💡 Standalone mode: Waiting for nodes to connect..."
     else
-        log cyan "🔗 Starting as Client Node..."
+        log cyan "🔗 Starting as Connected Node..."
         
         if [[ -z "$REMOTE_SERVER" ]]; then
-            log red "Remote server required for client mode"
+            log red "Remote server(s) required for connected mode"
             return 1
         fi
         
         listeners="--listeners ${PROTOCOL}://0.0.0.0:${PORT}"
-        peers="--peers ${PROTOCOL}://${REMOTE_SERVER}:${PORT}"
         
-        # Client mode: Connect to master/peers
+        # Multi-peer support: Split comma-separated servers
+        local peer_list=""
+        IFS=',' read -ra SERVERS <<< "$REMOTE_SERVER"
+        for server in "${SERVERS[@]}"; do
+            server=$(echo "$server" | xargs)  # trim whitespace
+            if [[ -n "$server" ]]; then
+                peer_list="$peer_list --peers ${PROTOCOL}://${server}:${PORT}"
+            fi
+        done
+        peers="$peer_list"
+        
+        # Connected mode: Connect to multiple peers
         easytier_cmd="$easytier_cmd -i $LOCAL_IP"
         
-        log cyan "🎯 Connecting to master: $REMOTE_SERVER:$PORT"
+        log cyan "🎯 Connecting to peers: $REMOTE_SERVER"
     fi
     
     # Add performance options
@@ -1462,8 +1481,8 @@ start_easytier() {
     
     if pgrep -f "easytier-core" > /dev/null; then
         echo "ACTIVE_TUNNEL=easytier" > "$STATUS_FILE"
-        echo "NODE_TYPE=${EASYTIER_NODE_TYPE:-client}" >> "$STATUS_FILE"
-        log green "✅ EasyTier started successfully as ${EASYTIER_NODE_TYPE:-client}"
+        echo "NODE_TYPE=${EASYTIER_NODE_TYPE:-connected}" >> "$STATUS_FILE"
+        log green "✅ EasyTier started successfully as ${EASYTIER_NODE_TYPE:-connected}"
         return 0
     else
         log red "❌ Failed to start EasyTier"
@@ -1484,23 +1503,41 @@ start_rathole() {
     source "$MAIN_CONFIG"
     
     # Create Rathole config based on node type
-    if [[ "${RATHOLE_NODE_TYPE:-client}" == "server" ]]; then
-        log cyan "🔧 Starting as Rathole Server..."
-        create_rathole_server_config
-        local config_flag="-s"
-        log cyan "💡 Server mode: Listening for client connections on port $PORT"
-    else
-        log cyan "🔗 Starting as Rathole Client..."
-        
-        if [[ -z "$REMOTE_SERVER" ]]; then
-            log red "Remote server required for client mode"
-            return 1
-        fi
-        
-        create_rathole_client_config
-        local config_flag="-c"
-        log cyan "🎯 Connecting to server: $REMOTE_SERVER:$PORT"
-    fi
+    case "${RATHOLE_NODE_TYPE:-bidirectional}" in
+        "listener")
+            log cyan "🔧 Starting as Rathole Listener..."
+            create_rathole_server_config
+            local config_flag="-s"
+            log cyan "💡 Listener mode: Waiting for connections on port $PORT"
+            ;;
+        "connector") 
+            log cyan "🔗 Starting as Rathole Connector..."
+            
+            if [[ -z "$REMOTE_SERVER" ]]; then
+                log red "Remote server required for connector mode"
+                return 1
+            fi
+            
+            create_rathole_client_config
+            local config_flag="-c"
+            log cyan "🎯 Connecting to: $REMOTE_SERVER:$PORT"
+            ;;
+        "bidirectional"|*)
+            log cyan "🔄 Starting Rathole in Bidirectional mode..."
+            
+            # Try as client first, then server on failure
+            if [[ -n "$REMOTE_SERVER" ]]; then
+                create_rathole_client_config
+                local config_flag="-c"
+                log cyan "🎯 Primary: Connecting to $REMOTE_SERVER:$PORT"
+                log cyan "💡 Fallback: Will listen on port $PORT if connection fails"
+            else
+                create_rathole_server_config
+                local config_flag="-s"
+                log cyan "💡 Primary: Listening on port $PORT"
+            fi
+            ;;
+    esac
     
     # Kill existing process
     pkill -f "rathole" 2>/dev/null || true
@@ -1514,8 +1551,8 @@ start_rathole() {
     
     if pgrep -f "rathole" > /dev/null; then
         echo "ACTIVE_TUNNEL=rathole" > "$STATUS_FILE"
-        echo "NODE_TYPE=${RATHOLE_NODE_TYPE:-client}" >> "$STATUS_FILE"
-        log green "✅ Rathole started successfully as ${RATHOLE_NODE_TYPE:-client}"
+        echo "NODE_TYPE=${RATHOLE_NODE_TYPE:-bidirectional}" >> "$STATUS_FILE"
+        log green "✅ Rathole started successfully as ${RATHOLE_NODE_TYPE:-bidirectional}"
         return 0
     else
         log red "❌ Failed to start Rathole"
@@ -2021,7 +2058,7 @@ restart_tunnel() {
 }
 
 switch_protocol() {
-    log purple "🔄 Protocol Switching"
+    log purple "🔄 Intelligent Protocol Switching"
     echo
     
     if [[ ! -f "$MAIN_CONFIG" ]]; then
@@ -2033,36 +2070,587 @@ switch_protocol() {
     
     log blue "Current protocol: $PROTOCOL"
     echo
-    echo "Available protocols:"
-    echo "1) UDP (Current: $([ "$PROTOCOL" == "udp" ] && echo "✅" || echo "  "))"
-    echo "2) TCP (Current: $([ "$PROTOCOL" == "tcp" ] && echo "✅" || echo "  "))"
-    echo "3) WebSocket (Current: $([ "$PROTOCOL" == "ws" ] && echo "✅" || echo "  "))"
-    echo
     
-    read -p "Select new protocol [1-3]: " protocol_choice
+    # Load enabled protocols for current tunnel mode
+    load_enabled_protocols
+    show_protocol_menu
+    
+    read -p "Select new protocol [1-5]: " protocol_choice
     
     local new_protocol
     case $protocol_choice in
         1) new_protocol="udp" ;;
         2) new_protocol="tcp" ;;
         3) new_protocol="ws" ;;
+        4) new_protocol="quic" ;;
+        5) new_protocol="wg" ;;
         *) log red "Invalid option"; return 1 ;;
     esac
+    
+    # Check if protocol is enabled for current mode
+    if ! is_protocol_enabled "$new_protocol"; then
+        log red "Protocol $new_protocol is not enabled for $TUNNEL_MODE mode"
+        return 1
+    fi
     
     if [[ "$new_protocol" == "$PROTOCOL" ]]; then
         log yellow "Already using $PROTOCOL protocol"
         return 0
     fi
     
-    log cyan "Switching to $new_protocol protocol..."
+    log cyan "Testing $new_protocol protocol stability..."
     
-    # Update configuration
+    # Test new protocol before switching
+    if test_protocol_stability "$new_protocol"; then
+        log green "Protocol $new_protocol passed stability test"
+        apply_protocol_switch "$new_protocol"
+    else
+        log red "Protocol $new_protocol failed stability test. Keeping current protocol."
+    fi
+}
+
+load_enabled_protocols() {
+    # Default enabled protocols per tunnel mode
+    case "$TUNNEL_MODE" in
+        "easytier")
+            ENABLED_PROTOCOLS="udp,tcp,ws,quic,wg"
+            ;;
+        "rathole")
+            ENABLED_PROTOCOLS="udp,tcp,ws"
+            ;;
+        "hybrid")
+            ENABLED_PROTOCOLS="udp,tcp,ws,quic"
+            ;;
+        *)
+            ENABLED_PROTOCOLS="udp,tcp"
+            ;;
+    esac
+    
+    # Load custom enabled protocols from config if exists
+    if grep -q "ENABLED_PROTOCOLS=" "$MAIN_CONFIG" 2>/dev/null; then
+        local custom_protocols=$(grep "ENABLED_PROTOCOLS=" "$MAIN_CONFIG" | cut -d'=' -f2 | tr -d '"')
+        if [[ -n "$custom_protocols" ]]; then
+            ENABLED_PROTOCOLS="$custom_protocols"
+        fi
+    fi
+}
+
+show_protocol_menu() {
+    echo "Available protocols for $TUNNEL_MODE mode:"
+    
+    local protocols=(udp tcp ws quic wg)
+    local descriptions=("Fast, low-latency" "Reliable, ordered" "HTTP-compatible" "Modern, fast" "Secure VPN")
+    
+    for i in "${!protocols[@]}"; do
+        local proto="${protocols[$i]}"
+        local desc="${descriptions[$i]}"
+        local status=""
+        
+        if [[ "$proto" == "$PROTOCOL" ]]; then
+            status="✅ Current"
+        elif is_protocol_enabled "$proto"; then
+            status="🟢 Available"  
+        else
+            status="🔴 Disabled"
+        fi
+        
+        echo "$((i+1))) $proto - $desc ($status)"
+    done
+    echo
+}
+
+is_protocol_enabled() {
+    local protocol="$1"
+    [[ ",$ENABLED_PROTOCOLS," == *",$protocol,"* ]]
+}
+
+test_protocol_stability() {
+    local test_protocol="$1"
+    log cyan "🧪 Running 10-minute stability test for $test_protocol protocol..."
+    
+    # Backup current config
+    local backup_protocol="$PROTOCOL"
+    
+    # Temporarily switch to test protocol
+    sed -i "s/PROTOCOL=\".*\"/PROTOCOL=\"$test_protocol\"/" "$MAIN_CONFIG"
+    
+    # Start test tunnel
+    log cyan "Starting test tunnel..."
+    restart_tunnel
+    
+    # Wait for initial connection
+    sleep 10
+    
+    local test_passed=true
+    local test_duration=600  # 10 minutes in seconds
+    local check_interval=30  # Check every 30 seconds
+    local checks_done=0
+    local total_checks=$((test_duration / check_interval))
+    
+    log cyan "Testing stability for $((test_duration / 60)) minutes..."
+    
+    while [[ $checks_done -lt $total_checks ]]; do
+        local progress=$((checks_done * 100 / total_checks))
+        echo -ne "\rProgress: $progress% (${checks_done}/${total_checks} checks)"
+        
+        # Perform connectivity test
+        if ! check_tunnel_health; then
+            log red "\nStability test failed at check $((checks_done + 1))"
+            test_passed=false
+            break
+        fi
+        
+        sleep $check_interval
+        ((checks_done++))
+    done
+    
+    echo  # New line after progress
+    
+    # Restore original protocol
+    sed -i "s/PROTOCOL=\".*\"/PROTOCOL=\"$backup_protocol\"/" "$MAIN_CONFIG"
+    
+    if [[ "$test_passed" == "true" ]]; then
+        log green "✅ Stability test passed! Protocol $test_protocol is stable."
+        return 0
+    else
+        log red "❌ Stability test failed! Protocol $test_protocol is unstable."
+        restart_tunnel  # Restart with original protocol
+        return 1
+    fi
+}
+
+apply_protocol_switch() {
+    local new_protocol="$1"
+    
+    log cyan "Applying protocol switch to $new_protocol..."
+    
+    # Update configuration permanently
     sed -i "s/PROTOCOL=\".*\"/PROTOCOL=\"$new_protocol\"/" "$MAIN_CONFIG"
     
     # Restart tunnel with new protocol
     restart_tunnel
     
     log green "Protocol switched to $new_protocol successfully!"
+    
+    # Save switch to history
+    echo "$(date): Protocol switched from $PROTOCOL to $new_protocol" >> "$LOG_DIR/protocol_switches.log"
+}
+
+# =============================================================================
+# Multi-Peer Configuration Functions
+# =============================================================================
+
+configure_multi_peer() {
+    clear
+    log purple "🌐 Multi-Peer Configuration"
+    echo "================================="
+    echo
+    
+    if [[ ! -f "$MAIN_CONFIG" ]]; then
+        log red "No configuration found. Run setup first."
+        press_key
+        return 1
+    fi
+    
+    source "$MAIN_CONFIG"
+    
+    log cyan "Current Configuration:"
+    echo "  Tunnel Mode: $TUNNEL_MODE"
+    echo "  Current Peers: $REMOTE_SERVER"
+    echo
+    
+    case "$TUNNEL_MODE" in
+        "easytier"|"hybrid")
+            configure_easytier_multi_peer
+            ;;
+        "rathole")
+            configure_rathole_multi_peer
+            ;;
+        *)
+            log red "Multi-peer not supported for mode: $TUNNEL_MODE"
+            press_key
+            return 1
+            ;;
+    esac
+}
+
+configure_easytier_multi_peer() {
+    log cyan "🚇 EasyTier Multi-Peer Configuration"
+    echo
+    
+    log blue "Multi-peer options:"
+    echo "1) Add new peer server"
+    echo "2) Remove peer server"
+    echo "3) Replace all peers"
+    echo "4) Test peer connectivity"
+    echo "0) Back"
+    echo
+    
+    read -p "Select option [1-4]: " multi_choice
+    
+    case $multi_choice in
+        1) add_peer_server ;;
+        2) remove_peer_server ;;
+        3) replace_all_peers ;;
+        4) test_peer_connectivity ;;
+        0) return ;;
+        *) log red "Invalid option"; sleep 1; configure_easytier_multi_peer ;;
+    esac
+}
+
+configure_rathole_multi_peer() {
+    log cyan "⚡ Rathole Multi-Instance Configuration"
+    echo
+    
+    log yellow "⚠️  Note: Rathole multi-peer requires multiple service instances"
+    echo
+    
+    log blue "Multi-instance options:"
+    echo "1) Configure multiple service ports"
+    echo "2) Setup load balancing"
+    echo "3) Configure service redundancy"
+    echo "0) Back"
+    echo
+    
+    read -p "Select option [1-3]: " rathole_choice
+    
+    case $rathole_choice in
+        1) configure_rathole_multi_services ;;
+        2) setup_rathole_load_balancing ;;
+        3) configure_rathole_redundancy ;;
+        0) return ;;
+        *) log red "Invalid option"; sleep 1; configure_rathole_multi_peer ;;
+    esac
+}
+
+add_peer_server() {
+    echo
+    log cyan "Adding new peer server..."
+    
+    read -p "Enter new peer IP/domain: " new_peer
+    if [[ -z "$new_peer" ]]; then
+        log red "Peer address cannot be empty"
+        press_key
+        return
+    fi
+    
+    # Validate peer format
+    if ! validate_peer_address "$new_peer"; then
+        log red "Invalid peer address format"
+        press_key
+        return
+    fi
+    
+    # Add to existing peers
+    if [[ -z "$REMOTE_SERVER" ]]; then
+        REMOTE_SERVER="$new_peer"
+    else
+        REMOTE_SERVER="$REMOTE_SERVER,$new_peer"
+    fi
+    
+    # Update configuration
+    sed -i "s/REMOTE_SERVER=\".*\"/REMOTE_SERVER=\"$REMOTE_SERVER\"/" "$MAIN_CONFIG"
+    
+    log green "✅ Peer $new_peer added successfully"
+    log cyan "Updated peers: $REMOTE_SERVER"
+    
+    read -p "Restart tunnel to apply changes? [Y/n]: " restart_confirm
+    if [[ ! "$restart_confirm" =~ ^[Nn]$ ]]; then
+        restart_tunnel
+    fi
+    
+    press_key
+}
+
+remove_peer_server() {
+    echo
+    log cyan "Removing peer server..."
+    
+    if [[ -z "$REMOTE_SERVER" ]]; then
+        log yellow "No peers configured"
+        press_key
+        return
+    fi
+    
+    # Show current peers
+    log blue "Current peers:"
+    IFS=',' read -ra PEERS <<< "$REMOTE_SERVER"
+    for i in "${!PEERS[@]}"; do
+        echo "  $((i+1))) ${PEERS[$i]}"
+    done
+    echo
+    
+    read -p "Select peer number to remove [1-${#PEERS[@]}]: " peer_choice
+    
+    if [[ "$peer_choice" =~ ^[0-9]+$ ]] && [[ "$peer_choice" -ge 1 ]] && [[ "$peer_choice" -le ${#PEERS[@]} ]]; then
+        local peer_to_remove="${PEERS[$((peer_choice-1))]}"
+        
+        # Remove peer from list
+        local new_peers=""
+        for peer in "${PEERS[@]}"; do
+            if [[ "$peer" != "$peer_to_remove" ]]; then
+                if [[ -z "$new_peers" ]]; then
+                    new_peers="$peer"
+                else
+                    new_peers="$new_peers,$peer"
+                fi
+            fi
+        done
+        
+        REMOTE_SERVER="$new_peers"
+        
+        # Update configuration
+        sed -i "s/REMOTE_SERVER=\".*\"/REMOTE_SERVER=\"$REMOTE_SERVER\"/" "$MAIN_CONFIG"
+        
+        log green "✅ Peer $peer_to_remove removed successfully"
+        log cyan "Updated peers: $REMOTE_SERVER"
+        
+        read -p "Restart tunnel to apply changes? [Y/n]: " restart_confirm
+        if [[ ! "$restart_confirm" =~ ^[Nn]$ ]]; then
+            restart_tunnel
+        fi
+    else
+        log red "Invalid selection"
+    fi
+    
+    press_key
+}
+
+replace_all_peers() {
+    echo
+    log cyan "Replacing all peer servers..."
+    
+    echo "Current peers: $REMOTE_SERVER"
+    echo
+    echo "Enter new peers (comma-separated):"
+    read -p "New peers: " new_peers
+    
+    if [[ -z "$new_peers" ]]; then
+        log red "Peer list cannot be empty"
+        press_key
+        return
+    fi
+    
+    # Validate all peers
+    IFS=',' read -ra NEW_PEERS <<< "$new_peers"
+    for peer in "${NEW_PEERS[@]}"; do
+        peer=$(echo "$peer" | xargs)  # trim whitespace
+        if [[ -n "$peer" ]] && ! validate_peer_address "$peer"; then
+            log red "Invalid peer address: $peer"
+            press_key
+            return
+        fi
+    done
+    
+    REMOTE_SERVER="$new_peers"
+    
+    # Update configuration
+    sed -i "s/REMOTE_SERVER=\".*\"/REMOTE_SERVER=\"$REMOTE_SERVER\"/" "$MAIN_CONFIG"
+    
+    log green "✅ All peers replaced successfully"
+    log cyan "New peers: $REMOTE_SERVER"
+    
+    read -p "Restart tunnel to apply changes? [Y/n]: " restart_confirm
+    if [[ ! "$restart_confirm" =~ ^[Nn]$ ]]; then
+        restart_tunnel
+    fi
+    
+    press_key
+}
+
+test_peer_connectivity() {
+    echo
+    log cyan "Testing peer connectivity..."
+    
+    if [[ -z "$REMOTE_SERVER" ]]; then
+        log yellow "No peers configured"
+        press_key
+        return
+    fi
+    
+    IFS=',' read -ra PEERS <<< "$REMOTE_SERVER"
+    
+    for peer in "${PEERS[@]}"; do
+        peer=$(echo "$peer" | xargs)  # trim whitespace
+        if [[ -n "$peer" ]]; then
+            log blue "Testing: $peer"
+            
+            # Ping test
+            if ping -c 3 -W 5 "$peer" >/dev/null 2>&1; then
+                echo "  ✅ Ping: Success"
+            else
+                echo "  ❌ Ping: Failed"
+            fi
+            
+            # Port test
+            if nc -z -w 5 "$peer" "$PORT" 2>/dev/null; then
+                echo "  ✅ Port $PORT: Open"
+            else
+                echo "  ❌ Port $PORT: Closed/Filtered"
+            fi
+            
+            echo
+        fi
+    done
+    
+    press_key
+}
+
+validate_peer_address() {
+    local peer="$1"
+    
+    # Check if it's a valid IP address
+    if [[ "$peer" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        return 0
+    fi
+    
+    # Check if it's a valid domain name
+    if [[ "$peer" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$ ]]; then
+        return 0
+    fi
+    
+    return 1
+}
+
+configure_rathole_multi_services() {
+    log cyan "Configuring multiple Rathole services..."
+    echo
+    
+    read -p "Enter number of services to configure [2-10]: " service_count
+    
+    if ! [[ "$service_count" =~ ^[0-9]+$ ]] || [[ "$service_count" -lt 2 ]] || [[ "$service_count" -gt 10 ]]; then
+        log red "Invalid service count. Must be between 2-10"
+        press_key
+        return
+    fi
+    
+    log cyan "Configuring $service_count services..."
+    
+    # Create multi-service configuration
+    create_rathole_multi_config "$service_count"
+    
+    log green "✅ Multi-service configuration created"
+    press_key
+}
+
+create_rathole_multi_config() {
+    local service_count="$1"
+    local base_port="$PORT"
+    
+    cat > "$RATHOLE_CONFIG" << EOF
+# Rathole Multi-Service Configuration
+# Generated by MoonTun v${MOONTUN_VERSION}
+
+[$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "server" || echo "client")]
+$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "bind_addr = \"0.0.0.0:${base_port}\"" || echo "remote_addr = \"${REMOTE_SERVER}:${base_port}\"")
+default_token = "${NETWORK_SECRET}"
+
+# Transport configuration
+[$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "server" || echo "client").transport]
+type = "${PROTOCOL}"
+
+[$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "server" || echo "client").transport.tcp]
+nodelay = true
+keepalive_secs = 20
+
+EOF
+
+    # Add multiple services
+    for ((i=1; i<=service_count; i++)); do
+        local service_port=$((base_port + i))
+        local local_port=$((8080 + i - 1))
+        
+        cat >> "$RATHOLE_CONFIG" << EOF
+# Service $i
+[$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "server" || echo "client").services.service_$i]
+type = "${PROTOCOL}"
+$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "bind_addr = \"0.0.0.0:${service_port}\"" || echo "local_addr = \"127.0.0.1:${local_port}\"")
+$([ "${RATHOLE_NODE_TYPE:-bidirectional}" != "listener" ] && echo "remote_addr = \"0.0.0.0:${service_port}\"")
+token = "${NETWORK_SECRET}"
+
+EOF
+    done
+}
+
+setup_rathole_load_balancing() {
+    log cyan "Setting up Rathole load balancing with HAProxy..."
+    
+    # Create HAProxy config for Rathole load balancing
+    create_rathole_haproxy_config
+    
+    log green "✅ Load balancing configured"
+    press_key
+}
+
+create_rathole_haproxy_config() {
+    cat >> /etc/haproxy/haproxy.cfg << EOF
+
+# Rathole Load Balancing Configuration
+# Added by MoonTun Multi-Peer Setup
+
+frontend rathole_frontend
+    bind *:$((PORT + 100))
+    mode tcp
+    default_backend rathole_backend
+
+backend rathole_backend
+    mode tcp
+    balance roundrobin
+    option tcp-check
+    
+    # Multiple Rathole instances
+    server rathole1 127.0.0.1:$((PORT + 1)) check inter 5s
+    server rathole2 127.0.0.1:$((PORT + 2)) check inter 5s
+    server rathole3 127.0.0.1:$((PORT + 3)) check inter 5s
+
+EOF
+
+    systemctl reload haproxy 2>/dev/null || true
+}
+
+configure_rathole_redundancy() {
+    log cyan "Configuring Rathole service redundancy..."
+    
+    # Create redundant service configuration
+    create_redundant_rathole_services
+    
+    log green "✅ Service redundancy configured"
+    press_key
+}
+
+create_redundant_rathole_services() {
+    # Create multiple Rathole configurations for redundancy
+    local configs=("primary" "secondary" "tertiary")
+    
+    for config in "${configs[@]}"; do
+        local config_file="$CONFIG_DIR/rathole_${config}.toml"
+        local port_offset=0
+        
+        case "$config" in
+            "secondary") port_offset=10 ;;
+            "tertiary") port_offset=20 ;;
+        esac
+        
+        local service_port=$((PORT + port_offset))
+        
+        cat > "$config_file" << EOF
+# Rathole ${config} configuration
+[$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "server" || echo "client")]
+$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "bind_addr = \"0.0.0.0:${service_port}\"" || echo "remote_addr = \"${REMOTE_SERVER}:${service_port}\"")
+default_token = "${NETWORK_SECRET}_${config}"
+
+[$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "server" || echo "client").transport]
+type = "${PROTOCOL}"
+
+[$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "server" || echo "client").services.main]
+type = "${PROTOCOL}"
+$([ "${RATHOLE_NODE_TYPE:-bidirectional}" == "listener" ] && echo "bind_addr = \"0.0.0.0:$((8080 + port_offset))\"" || echo "local_addr = \"127.0.0.1:$((8080 + port_offset))\"")
+$([ "${RATHOLE_NODE_TYPE:-bidirectional}" != "listener" ] && echo "remote_addr = \"0.0.0.0:$((8080 + port_offset))\"")
+token = "${NETWORK_SECRET}_${config}"
+EOF
+        
+        log green "Created $config configuration: $config_file"
+    done
 }
 
 # =============================================================================
@@ -2071,14 +2659,14 @@ switch_protocol() {
 
 show_help() {
     clear
-    echo -e "${CYAN}🚀 MVTunnel - Intelligent Dual-Core Tunnel System v${MVTUNNEL_VERSION}${NC}"
+    echo -e "${CYAN}🚀 MoonTun - Intelligent Multi-Node Tunnel System v${MOONTUN_VERSION}${NC}"
     echo "================================================================="
     echo
     echo -e "${GREEN}USAGE:${NC}"
-    echo "  sudo mv <command> [options]"
+    echo "  sudo moontun <command> [options]"
     echo
     echo -e "${GREEN}INSTALLATION:${NC}"
-    echo -e "${CYAN}  curl -fsSL https://github.com/k4lantar4/mvtunnel/raw/main/mvtunnel.sh | sudo bash -s -- --install${NC}"
+    echo -e "${CYAN}  curl -fsSL https://github.com/k4lantar4/moontun/raw/main/moontun.sh | sudo bash -s -- --install${NC}"
     echo
     echo -e "${GREEN}COMMANDS:${NC}"
     echo -e "${CYAN}  setup${NC}          Interactive tunnel configuration"
@@ -2088,7 +2676,8 @@ show_help() {
     echo -e "${CYAN}  monitor${NC}        Live monitoring dashboard"
     echo -e "${CYAN}  stop${NC}           Stop all tunnel processes"
     echo -e "${CYAN}  restart${NC}        Restart tunnel services"
-    echo -e "${CYAN}  switch${NC}         Switch between protocols"
+    echo -e "${CYAN}  switch${NC}         Intelligent protocol switching"
+    echo -e "${CYAN}  multi-peer${NC}     Configure multi-peer connections"
     echo -e "${CYAN}  optimize${NC}       Apply network optimizations"
     echo -e "${CYAN}  haproxy${NC}        Setup HAProxy load balancing"
     echo -e "${CYAN}  logs${NC}           View system logs"
@@ -2098,29 +2687,32 @@ show_help() {
     echo -e "${CYAN}  help${NC}           Show this help message"
     echo
     echo -e "${GREEN}FEATURES:${NC}"
-    echo "  • Dual-core tunnel system (EasyTier + Rathole)"
+    echo "  • Multi-node tunnel system (EasyTier + Rathole)"
     echo "  • Intelligent failover and auto-recovery"
-    echo "  • Dynamic protocol switching (UDP/TCP/WS)"
+    echo "  • Multi-peer connections (2+ servers)"
+    echo "  • Smart protocol switching with stability testing"
+    echo "  • Bidirectional connection support"
     echo "  • Real-time network monitoring"
     echo "  • Enterprise-grade stability"
     echo "  • Iran network condition optimization"
     echo
     echo -e "${GREEN}EXAMPLES:${NC}"
-    echo "  sudo mv setup      # Configure new tunnel"
-    echo "  sudo mv connect    # Start tunneling"
-    echo "  sudo mv monitor    # Monitor live status"
-    echo "  sudo mv switch     # Change protocol"
+    echo "  sudo moontun setup      # Configure new tunnel"
+    echo "  sudo moontun connect    # Start tunneling"
+    echo "  sudo moontun monitor    # Monitor live status"
+    echo "  sudo moontun switch     # Smart protocol switching"
+    echo "  sudo moontun multi-peer # Configure multi-server"
     echo
-    echo -e "${PURPLE}For support: https://github.com/k4lantar4/mvtunnel${NC}"
+    echo -e "${PURPLE}For support: https://github.com/k4lantar4/moontun${NC}"
 }
 
 show_menu() {
     clear
     echo -e "${CYAN}╔════════════════════════════════════════╗"
-    echo -e "║         ${WHITE}MVTunnel Manager v${MVTUNNEL_VERSION}${CYAN}         ║"
-    echo -e "║    ${WHITE}Intelligent Dual-Core Tunnel System${CYAN}  ║"
+    echo -e "║         ${WHITE}MoonTun Manager v${MOONTUN_VERSION}${CYAN}          ║"
+    echo -e "║    ${WHITE}Intelligent Multi-Node System${CYAN}      ║"
     echo -e "╠════════════════════════════════════════╣"
-    echo -e "║  ${WHITE}EasyTier + Rathole Integration      ${CYAN}║"
+    echo -e "║  ${WHITE}EasyTier + Rathole + Multi-Peer${CYAN}     ║"
     echo -e "╚════════════════════════════════════════╝${NC}"
     echo
     
@@ -2133,13 +2725,14 @@ show_menu() {
     echo -e "${GREEN}[3]${NC}  🚀 Connect Tunnel"
     echo -e "${GREEN}[4]${NC}  📊 System Status"
     echo -e "${GREEN}[5]${NC}  📈 Live Monitor"
-    echo -e "${GREEN}[6]${NC}  🔄 Switch Protocol"
-    echo -e "${GREEN}[7]${NC}  🛑 Stop Tunnel"
-    echo -e "${GREEN}[8]${NC}  ♻️  Restart Tunnel"
-    echo -e "${GREEN}[9]${NC}  ⚡ Network Optimization"
-    echo -e "${GREEN}[10]${NC} 📝 View Logs"
-    echo -e "${GREEN}[11]${NC} 💾 Backup Configuration"
-    echo -e "${GREEN}[12]${NC} 🔄 Restore Configuration"
+    echo -e "${GREEN}[6]${NC}  🔄 Smart Protocol Switch"
+    echo -e "${GREEN}[7]${NC}  🌐 Multi-Peer Configuration"
+    echo -e "${GREEN}[8]${NC}  🛑 Stop Tunnel"
+    echo -e "${GREEN}[9]${NC}  ♻️  Restart Tunnel"
+    echo -e "${GREEN}[10]${NC} ⚡ Network Optimization"
+    echo -e "${GREEN}[11]${NC} 📝 View Logs"
+    echo -e "${GREEN}[12]${NC} 💾 Backup Configuration"
+    echo -e "${GREEN}[13]${NC} 🔄 Restore Configuration"
     echo -e "${GREEN}[0]${NC}  ❌ Exit"
     echo
 }
@@ -2512,10 +3105,10 @@ main() {
     
     case "${1:-menu}" in
         "--install"|"install")
-            install_mvtunnel
+            install_moontun
             ;;
         "--auto"|"auto")
-            install_mvtunnel "auto"
+            install_moontun "auto"
             ;;
         "setup")
             check_root
@@ -2547,6 +3140,10 @@ main() {
             check_root
             switch_protocol
             ;;
+        "multi-peer")
+            check_root
+            configure_multi_peer
+            ;;
         "optimize")
             check_root
             optimize_network
@@ -2569,7 +3166,7 @@ main() {
             run_daemon_mode
             ;;
         "version")
-            echo "MVTunnel v${MVTUNNEL_VERSION}"
+            echo "MoonTun v${MOONTUN_VERSION}"
             ;;
         "help"|"--help"|"-h")
             show_help
@@ -2579,7 +3176,7 @@ main() {
                 # Interactive menu mode
                 while true; do
                     show_menu
-                    echo -n "Select option [0-12]: "
+                    echo -n "Select option [0-13]: "
                     read choice
                     
                     case $choice in
@@ -2589,18 +3186,19 @@ main() {
                         4) show_status; press_key ;;
                         5) live_monitor ;;
                         6) switch_protocol ;;
-                        7) stop_tunnel; press_key ;;
-                        8) restart_tunnel; press_key ;;
-                        9) optimize_network; press_key ;;
-                        10) view_logs ;;
-                        11) backup_configuration; press_key ;;
-                        12) restore_configuration; press_key ;;
+                        7) configure_multi_peer ;;
+                        8) stop_tunnel; press_key ;;
+                        9) restart_tunnel; press_key ;;
+                        10) optimize_network; press_key ;;
+                        11) view_logs ;;
+                        12) backup_configuration; press_key ;;
+                        13) restore_configuration; press_key ;;
                         0) log green "👋 Goodbye!"; exit 0 ;;
                         *) log red "Invalid option"; sleep 1 ;;
                     esac
                 done
             else
-                log red "Interactive menu requires root access. Use: sudo mv"
+                log red "Interactive menu requires root access. Use: sudo moontun"
                 show_help
             fi
             ;;

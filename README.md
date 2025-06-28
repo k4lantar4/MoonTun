@@ -1,31 +1,36 @@
-# 🚀 MVTunnel - Intelligent Dual-Core Tunnel System
+# 🚀 MoonTun - Intelligent Multi-Node Tunnel System
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub release](https://img.shields.io/github/release/k4lantar4/mvtunnel.svg)](https://github.com/k4lantar4/mvtunnel/releases)
+[![GitHub release](https://img.shields.io/github/release/k4lantar4/moontun.svg)](https://github.com/k4lantar4/moontun/releases)
 [![Bash](https://img.shields.io/badge/Language-Bash-green.svg)](https://www.gnu.org/software/bash/)
 
-**MVTunnel** is an intelligent dual-core tunnel system that combines **EasyTier** + **Rathole** with smart failover and protocol switching capabilities. Designed specifically for Iran-Foreign server tunneling with enterprise-grade stability.
+**MoonTun** is an intelligent multi-node tunnel system that combines **EasyTier** + **Rathole** with smart failover, multi-peer connections, and intelligent protocol switching. Designed specifically for Iran-Foreign server tunneling with enterprise-grade stability and 2+ server support.
 
 ## ✨ Features
 
-🔥 **Dual-Core Architecture**
+🔥 **Multi-Node Architecture**
 - **EasyTier Core**: Modern P2P mesh VPN with WireGuard-like performance
 - **Rathole Core**: High-performance TCP/UDP tunnel with NAT traversal
-- **Intelligent Failover**: Automatic switching between cores on failure
+- **Multi-Peer Support**: Connect 2+ servers simultaneously
+- **Intelligent Failover**: Automatic switching between cores and peers
 
 ⚡ **Smart Protocol Switching**
-- UDP, TCP, WebSocket, QUIC protocols support
+- UDP, TCP, WebSocket, QUIC, WireGuard protocols support
+- 10-minute stability testing before switching
 - Automatic protocol detection and switching
+- Bidirectional connection support
 - Iran network condition optimization
 
 🛡️ **Enterprise-Grade Reliability**
 - Real-time health monitoring
 - Automatic recovery mechanisms
 - Support for 1000+ concurrent users (3x-ui compatible)
+- Multi-server redundancy
 
 🔧 **Easy Management**
 - One-line installation
 - Interactive setup wizard
+- Multi-peer configuration
 - Command-line interface
 - Web dashboard support
 
@@ -33,105 +38,107 @@
 
 ### One-Line Install
 ```bash
-curl -fsSL https://github.com/k4lantar4/mvtunnel/raw/main/mvtunnel.sh | sudo bash -s -- --install
+curl -fsSL https://github.com/k4lantar4/moontun/raw/main/moontun.sh | sudo bash -s -- --install
 ```
 
 ### Manual Installation
 ```bash
 # Download script
-wget https://github.com/k4lantar4/mvtunnel/raw/main/mvtunnel.sh
+wget https://github.com/k4lantar4/moontun/raw/main/moontun.sh
 
 # Make executable
-chmod +x mvtunnel.sh
+chmod +x moontun.sh
 
 # Install
-sudo ./mvtunnel.sh --install
+sudo ./moontun.sh --install
 ```
 
 ## 🚀 Quick Start
 
 ### 1. Setup Tunnel
 ```bash
-sudo mv setup
+sudo moontun setup
 ```
 
 ### 2. Install Tunnel Cores
 ```bash
-sudo mv install-cores
+sudo moontun install-cores
 ```
 
 ### 3. Connect
 ```bash
-sudo mv connect
+sudo moontun connect
 ```
 
 ### 4. Monitor Status
 ```bash
-sudo mv status
-sudo mv monitor
+sudo moontun status
+sudo moontun monitor
 ```
 
 ## 📋 Available Commands
 
 | Command | Description |
 |---------|-------------|
-| `sudo mv setup` | Interactive tunnel configuration |
-| `sudo mv install-cores` | Manage tunnel cores (EasyTier/Rathole) |
-| `sudo mv connect` | Connect tunnel with current config |
-| `sudo mv status` | Show system and tunnel status |
-| `sudo mv monitor` | Live monitoring dashboard |
-| `sudo mv stop` | Stop all tunnel processes |
-| `sudo mv restart` | Restart tunnel services |
-| `sudo mv switch` | Switch between protocols |
-| `sudo mv optimize` | Apply network optimizations |
-| `sudo mv haproxy` | Setup HAProxy load balancing |
-| `sudo mv logs` | View system logs |
-| `sudo mv backup` | Create configuration backup |
-| `sudo mv restore` | Restore configuration from backup |
-| `sudo mv help` | Show help message |
+| `sudo moontun setup` | Interactive tunnel configuration |
+| `sudo moontun install-cores` | Manage tunnel cores (EasyTier/Rathole) |
+| `sudo moontun connect` | Connect tunnel with current config |
+| `sudo moontun status` | Show system and tunnel status |
+| `sudo moontun monitor` | Live monitoring dashboard |
+| `sudo moontun stop` | Stop all tunnel processes |
+| `sudo moontun restart` | Restart tunnel services |
+| `sudo moontun switch` | Smart protocol switching with testing |
+| `sudo moontun multi-peer` | Configure multi-peer connections |
+| `sudo moontun optimize` | Apply network optimizations |
+| `sudo moontun haproxy` | Setup HAProxy load balancing |
+| `sudo moontun logs` | View system logs |
+| `sudo moontun backup` | Create configuration backup |
+| `sudo moontun restore` | Restore configuration from backup |
+| `sudo moontun help` | Show help message |
 
 ## 🔧 Configuration Examples
 
-### EasyTier Master Node (Foreign Server)
+### EasyTier Standalone Node (Foreign Server)
 ```bash
-sudo mv setup
+sudo moontun setup
 # Select: EasyTier mode
-# Select: Master node (0.0.0.0 - No peers needed)
+# Select: Standalone node (No remote peers - Listen for connections)
 # Local IP: 10.10.10.1
-# Protocol: UDP/TCP/WebSocket
+# Protocol: UDP/TCP/WebSocket/QUIC/WireGuard
 ```
 
-### EasyTier Client Node (Iran Server)
+### EasyTier Connected Node (Iran Server)
 ```bash
-sudo mv setup
+sudo moontun setup
 # Select: EasyTier mode  
-# Select: Client node
+# Select: Connected node
 # Local IP: 10.10.10.2
-# Remote server: YOUR_FOREIGN_SERVER_IP
-# Protocol: UDP/TCP/WebSocket
+# Remote servers: SERVER1_IP,SERVER2_IP,SERVER3_IP
+# Protocol: UDP/TCP/WebSocket/QUIC/WireGuard
 ```
 
-### Rathole Server (Foreign Server)
+### Rathole Bidirectional (Any Server)
 ```bash
-sudo mv setup
+sudo moontun setup
 # Select: Rathole mode
-# Select: Server (receives connections)
+# Select: Bidirectional (Auto-reconnect from both sides)
+# Remote servers: PRIMARY_IP,BACKUP_IP
 # Configure ports and protocols
 ```
 
-### Rathole Client (Iran Server)
+### Multi-Peer Configuration
 ```bash
-sudo mv setup
-# Select: Rathole mode
-# Select: Client (connects to foreign)
-# Remote server: YOUR_FOREIGN_SERVER_IP
+sudo moontun multi-peer
+# Add/remove/test multiple peer servers
+# Configure load balancing
+# Setup service redundancy
 ```
 
 ## 📂 Project Structure
 
 ```
-mvtunnel/
-├── mvtunnel.sh           # Main script
+moontun/
+├── moontun.sh           # Main script
 ├── binaries/             # Prebuilt binaries
 │   ├── x86_64/          # Core files for x86_64
 │   │   ├── easytier-core
@@ -147,14 +154,16 @@ mvtunnel/
 ## 🔄 Tunnel Modes
 
 ### 1. EasyTier Mode
-- **Master/Client architecture**
+- **Standalone/Connected architecture**
 - **P2P mesh networking**
+- **Multi-peer support**
 - **WireGuard-like performance**
 - **Best for**: Stable long-term connections
 
 ### 2. Rathole Mode
-- **Server/Client architecture**
+- **Bidirectional connection support**
 - **High-performance tunneling**
+- **Multi-service instances**
 - **Advanced NAT traversal**
 - **Best for**: High-throughput applications
 
@@ -184,27 +193,27 @@ mvtunnel/
 
 ```bash
 # View live monitoring
-sudo mv monitor
+sudo moontun monitor
 
 # Check detailed status
-sudo mv status
+sudo moontun status
 
 # View logs
-sudo mv logs
+sudo moontun logs
 ```
 
 ## 🛠️ Advanced Features
 
 ### HAProxy Integration
 ```bash
-sudo mv haproxy
+sudo moontun haproxy
 # Automatically sets up load balancing
 # Statistics available at: http://server:8080/stats
 ```
 
 ### Network Optimization
 ```bash
-sudo mv optimize
+sudo moontun optimize
 # Applies kernel-level optimizations
 # TCP BBR congestion control
 # Buffer size tuning
@@ -213,33 +222,36 @@ sudo mv optimize
 ### Backup & Restore
 ```bash
 # Create backup
-sudo mv backup
+sudo moontun backup
 
 # Restore from backup
-sudo mv restore
+sudo moontun restore
 ```
 
 ## 🔍 Troubleshooting
 
 ### Check Status
 ```bash
-sudo mv status
+sudo moontun status
 ```
 
 ### View Logs
 ```bash
-sudo mv logs
+sudo moontun logs
 ```
 
 ### Restart Services
 ```bash
-sudo mv restart
+sudo moontun restart
 ```
 
 ### Test Connectivity
 ```bash
 # Check if cores are installed
-sudo mv install-cores
+sudo moontun install-cores
+
+# Test multi-peer connectivity
+sudo moontun multi-peer
 
 # Test tunnel connection
 ping 10.10.10.1  # Replace with your tunnel IP
@@ -273,9 +285,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **GitHub Issues**: [Report bugs](https://github.com/k4lantar4/mvtunnel/issues)
-- **Documentation**: [Wiki](https://github.com/k4lantar4/mvtunnel/wiki)
-- **Discussions**: [GitHub Discussions](https://github.com/k4lantar4/mvtunnel/discussions)
+- **GitHub Issues**: [Report bugs](https://github.com/k4lantar4/moontun/issues)
+- **Documentation**: [Wiki](https://github.com/k4lantar4/moontun/wiki)
+- **Discussions**: [GitHub Discussions](https://github.com/k4lantar4/moontun/discussions)
 
 ---
 
